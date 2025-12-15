@@ -40,7 +40,7 @@ jobs:
           # --noconsole: 隐藏黑色命令行窗口 (GUI程序必备)
           # --name: 指定生成的 EXE 名字
           # --clean: 清理缓存
-          pyinstaller --onefile --noconsole --clean --icon="app.ico" --name "FishMoney" main.py
+          pyinstaller --onefile --noconsole --clean --icon="app.ico" --name "FishMoney" fish.py
 
       # 5. 上传构建产物 (让你能下载到)
       - name: Upload Artifact
