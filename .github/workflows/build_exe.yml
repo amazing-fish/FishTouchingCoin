@@ -29,9 +29,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install pyinstaller
-          # 你的代码只用了标准库，所以不需要安装 requirements.txt
-          # 如果未来加了 requests 等库，在这里加 pip install requests
 
       # 4. 执行打包命令 (核心步骤)
       - name: Build with PyInstaller
