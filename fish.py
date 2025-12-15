@@ -6,6 +6,10 @@ import time
 import json
 import os
 from datetime import datetime, time as dtime
+import threading
+
+import pystray
+from PIL import Image
 
 
 # ==========================================
@@ -338,6 +342,10 @@ class FishMoneyApp:
         self.is_visible = True
         self.boss_key_pressed = False
 
+        self.is_in_tray = False
+        self.tray_icon = None
+        self.tray_thread = None
+
         self.is_paused = False  # —— 右键菜单新增：暂停计费 ——
 
         now_m = time.monotonic()
@@ -444,6 +452,7 @@ class FishMoneyApp:
         self.root.bind("<Map>", lambda e: self.lift_once())
         self.root.bind("<FocusOut>", lambda e: self.lift_soft())
         self.root.bind("<Visibility>", lambda e: self.lift_soft())
+        self.root.bind("<Unmap>", self.on_minimize)
 
     # 置顶（强）
     def lift_once(self):
@@ -471,6 +480,69 @@ class FishMoneyApp:
         self._last_topmost_fallback_m = now_m
         # 不做频繁反复 set topmost，只偶尔 lift 一次
         self.lift_soft()
+
+    def on_minimize(self, event):
+        # 最小化时收到托盘
+        if self.root.state() == "iconic":
+            self.hide_to_tray()
+
+    def hide_to_tray(self):
+        if self.is_in_tray:
+            return
+
+        self.is_in_tray = True
+        self.is_visible = False
+        self.root.withdraw()
+        self._start_tray_icon()
+
+    def restore_from_tray(self):
+        if not self.is_in_tray:
+            return
+
+        self.is_in_tray = False
+        self.is_visible = True
+        self.root.deiconify()
+        try:
+            self.root.state("normal")
+        except Exception:
+            pass
+        self.lift_once()
+        self._stop_tray_icon()
+
+    def _start_tray_icon(self):
+        def on_show(icon, item):
+            self.root.after(0, self.restore_from_tray)
+
+        def on_exit(icon, item):
+            self.root.after(0, self.on_exit)
+
+        def runner():
+            image = self._load_tray_image()
+            menu = pystray.Menu(
+                pystray.MenuItem("显示窗口", on_show),
+                pystray.MenuItem("退出", on_exit),
+            )
+            self.tray_icon = pystray.Icon("FishTouchingCoin", image, "摸鱼币", menu)
+            self.tray_icon.run()
+
+        self.tray_thread = threading.Thread(target=runner, daemon=True)
+        self.tray_thread.start()
+
+    def _stop_tray_icon(self):
+        if self.tray_icon is not None:
+            try:
+                self.tray_icon.stop()
+            except Exception:
+                pass
+            self.tray_icon = None
+            self.tray_thread = None
+
+    def _load_tray_image(self):
+        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        try:
+            return Image.open(icon_path)
+        except Exception:
+            return Image.new("RGB", (64, 64), Config.BG_KEY_COLOR)
 
     def get_time_status(self) -> str:
         now_time = datetime.now().time()
@@ -660,7 +732,9 @@ class FishMoneyApp:
 
     # 老板键：显隐
     def toggle_visibility(self):
-        if self.is_visible:
+        if self.is_in_tray:
+            self.restore_from_tray()
+        elif self.is_visible:
             self.root.withdraw()
             self.is_visible = False
         else:
@@ -721,6 +795,7 @@ class FishMoneyApp:
             DataManager.save(self.current_date, self.earned_money)
         except Exception:
             pass
+        self._stop_tray_icon()
         try:
             self.root.destroy()
         except Exception:
