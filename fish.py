@@ -5,7 +5,7 @@ from ctypes import wintypes
 import time
 import json
 import os
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timedelta
 import threading
 
 import pystray
@@ -533,6 +533,7 @@ class FishMoneyApp:
     def create_context_menu(self):
         self.menu = tk.Menu(self.root, tearoff=0)
         self.menu.add_command(label="暂停/继续", command=self.toggle_pause)
+        self.menu.add_command(label="详情", command=self.open_details)
         self.menu.add_command(label="重新配置…", command=self.open_settings)
         self.menu.add_command(label="重置今日金额", command=self.reset_today)
         self.menu.add_separator()
@@ -624,6 +625,9 @@ class FishMoneyApp:
         def on_show(icon, item):
             self.root.after(0, self.restore_from_tray)
 
+        def on_details(icon, item):
+            self.root.after(0, self.open_details)
+
         def on_exit(icon, item):
             self.root.after(0, self.on_exit)
 
@@ -631,6 +635,7 @@ class FishMoneyApp:
             image = self._load_tray_image()
             menu = pystray.Menu(
                 pystray.MenuItem("显示窗口", on_show),
+                pystray.MenuItem("详情", on_details),
                 pystray.MenuItem("退出", on_exit),
             )
             self.tray_icon = pystray.Icon("FishTouchingCoin", image, "摸鱼币", menu)
@@ -654,6 +659,42 @@ class FishMoneyApp:
             return Image.open(icon_path)
         except Exception:
             return Image.new("RGB", (64, 64), Config.BG_KEY_COLOR)
+
+    def open_details(self):
+        details = tk.Toplevel(self.root)
+        details.title("详情")
+        details.resizable(False, False)
+        details.attributes("-topmost", True)
+
+        now = datetime.now()
+        data_map = dict(self.history)
+        data_map[self.current_date] = float(self.earned_money)
+
+        days = []
+        for i in range(6, -1, -1):
+            day = now.date() - timedelta(days=i)
+            day_str = day.strftime("%Y-%m-%d")
+            days.append((day_str, float(data_map.get(day_str, 0.0))))
+
+        max_value = max((value for _, value in days), default=0.0)
+        bar_width = 20
+
+        header = tk.Label(details, text="近7天摸鱼趋势", font=(Config.FONT_FAMILY, 10, "bold"))
+        header.pack(padx=12, pady=(12, 6))
+
+        list_frame = tk.Frame(details)
+        list_frame.pack(padx=12, pady=(0, 12), fill="both", expand=True)
+
+        for day_str, value in days:
+            if max_value > 0:
+                bar_count = int(round((value / max_value) * bar_width))
+            else:
+                bar_count = 0
+            bar_text = "█" * bar_count
+            row_text = f"{day_str}  ￥{value:,.2f}  {bar_text}"
+            tk.Label(list_frame, text=row_text, anchor="w", font=(Config.FONT_FAMILY, Config.FONT_SIZE)).pack(
+                fill="x"
+            )
 
     def get_time_status(self) -> str:
         now_time = datetime.now().time()
