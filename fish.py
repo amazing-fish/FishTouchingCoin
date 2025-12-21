@@ -48,8 +48,8 @@ class Config:
     BOSS_KEY = 0x78  # F9
 
     # 数据文件
-    DATA_FILE = "fish_data_v1.5.json"
-    SETTINGS_FILE = "fish_settings_v1.json"
+    DATA_FILE_NAME = "fish_data_v1.5.json"
+    SETTINGS_FILE_NAME = "fish_settings_v1.json"
 
     # 稳定性参数
     MAX_DELTA = 1.0
@@ -57,6 +57,52 @@ class Config:
 
     # 置顶兜底检查（很低频，避免顶牛）
     TOPMOST_FALLBACK_CHECK_INTERVAL = 2.0
+
+
+# ==========================================
+# 路径管理（本地数据持久化）
+# ==========================================
+class StoragePaths:
+    @staticmethod
+    def data_dir() -> str:
+        appdata = os.getenv("APPDATA")
+        if appdata:
+            base = appdata
+        else:
+            base = os.getenv("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+        return os.path.join(base, "FishTouchingCoin")
+
+    @staticmethod
+    def ensure_dir() -> str:
+        path = StoragePaths.data_dir()
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    @staticmethod
+    def data_file() -> str:
+        return os.path.join(StoragePaths.ensure_dir(), Config.DATA_FILE_NAME)
+
+    @staticmethod
+    def settings_file() -> str:
+        return os.path.join(StoragePaths.ensure_dir(), Config.SETTINGS_FILE_NAME)
+
+    @staticmethod
+    def legacy_data_file() -> str:
+        return os.path.abspath(Config.DATA_FILE_NAME)
+
+    @staticmethod
+    def legacy_settings_file() -> str:
+        return os.path.abspath(Config.SETTINGS_FILE_NAME)
+
+    @staticmethod
+    def migrate_legacy_file(legacy_path: str, target_path: str):
+        if os.path.exists(target_path) or not os.path.exists(legacy_path):
+            return
+        try:
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            os.replace(legacy_path, target_path)
+        except Exception:
+            pass
 
 
 # ==========================================
@@ -79,28 +125,31 @@ class SettingsManager:
 
     @staticmethod
     def load_or_none() -> dict | None:
-        if not os.path.exists(Config.SETTINGS_FILE):
+        settings_file = StoragePaths.settings_file()
+        StoragePaths.migrate_legacy_file(StoragePaths.legacy_settings_file(), settings_file)
+        if not os.path.exists(settings_file):
             return None
         try:
-            with open(Config.SETTINGS_FILE, "r", encoding="utf-8") as f:
+            with open(settings_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             # 配置损坏：备份并当作首次启动
             try:
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                os.replace(Config.SETTINGS_FILE, f"{Config.SETTINGS_FILE}.corrupt.{ts}")
+                os.replace(settings_file, f"{settings_file}.corrupt.{ts}")
             except Exception:
                 pass
             return None
 
     @staticmethod
     def save(settings: dict):
-        tmp = Config.SETTINGS_FILE + ".tmp"
+        settings_file = StoragePaths.settings_file()
+        tmp = settings_file + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(settings, f, ensure_ascii=False, indent=2)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, Config.SETTINGS_FILE)
+        os.replace(tmp, settings_file)
 
     @staticmethod
     def apply_to_config(settings: dict):
@@ -295,11 +344,13 @@ class DataManager:
     @staticmethod
     def load():
         today = DataManager._today_str()
-        if not os.path.exists(Config.DATA_FILE):
+        data_file = StoragePaths.data_file()
+        StoragePaths.migrate_legacy_file(StoragePaths.legacy_data_file(), data_file)
+        if not os.path.exists(data_file):
             return today, 0.0, "", {}
 
         try:
-            with open(Config.DATA_FILE, "r", encoding="utf-8") as f:
+            with open(data_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             file_date = data.get("date") or today
@@ -312,7 +363,7 @@ class DataManager:
         except Exception:
             try:
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                os.replace(Config.DATA_FILE, f"{Config.DATA_FILE}.corrupt.{ts}")
+                os.replace(data_file, f"{data_file}.corrupt.{ts}")
             except Exception:
                 pass
             return today, 0.0, "", {}
@@ -325,13 +376,14 @@ class DataManager:
             "settled_date": settled_date,
             "history": history,
         }
-        tmp = Config.DATA_FILE + ".tmp"
+        data_file = StoragePaths.data_file()
+        tmp = data_file + ".tmp"
 
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, Config.DATA_FILE)
+        os.replace(tmp, data_file)
 
     @staticmethod
     def append_history(history: dict[str, float], date_str: str, money: float) -> dict[str, float]:
