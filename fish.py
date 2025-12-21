@@ -651,7 +651,6 @@ class FishMoneyApp:
                 self.history = DataManager.append_history(self.history, today, self.earned_money)
             except Exception:
                 pass
-            self.earned_money = 0.0
             self.settled_date = today
             try:
                 DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
