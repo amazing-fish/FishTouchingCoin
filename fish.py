@@ -296,18 +296,18 @@ class DataManager:
     def load():
         today = DataManager._today_str()
         if not os.path.exists(Config.DATA_FILE):
-            return today, 0.0
+            return today, 0.0, "", {}
 
         try:
             with open(Config.DATA_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            file_date = data.get("date")
+            file_date = data.get("date") or today
             money = float(data.get("money", 0.0))
+            settled_date = data.get("settled_date", "")
+            history = data.get("history", {})
 
-            if file_date != today:
-                return today, 0.0
-            return today, money
+            return file_date, money, settled_date, history
 
         except Exception:
             try:
@@ -315,11 +315,16 @@ class DataManager:
                 os.replace(Config.DATA_FILE, f"{Config.DATA_FILE}.corrupt.{ts}")
             except Exception:
                 pass
-            return today, 0.0
+            return today, 0.0, "", {}
 
     @staticmethod
-    def save(date_str: str, money: float):
-        data = {"date": date_str, "money": float(money)}
+    def save(date_str: str, money: float, settled_date: str, history: dict[str, float]):
+        data = {
+            "date": date_str,
+            "money": float(money),
+            "settled_date": settled_date,
+            "history": history,
+        }
         tmp = Config.DATA_FILE + ".tmp"
 
         with open(tmp, "w", encoding="utf-8") as f:
@@ -327,6 +332,11 @@ class DataManager:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, Config.DATA_FILE)
+
+    @staticmethod
+    def append_history(history: dict[str, float], date_str: str, money: float) -> dict[str, float]:
+        history[str(date_str)] = float(money)
+        return history
 
 
 # ==========================================
@@ -336,7 +346,12 @@ class FishMoneyApp:
     def __init__(self, root: tk.Tk):
         self.root = root
 
-        self.current_date, self.earned_money = DataManager.load()
+        (
+            self.current_date,
+            self.earned_money,
+            self.settled_date,
+            self.history,
+        ) = DataManager.load()
         self.base_salary_per_second = self.calculate_base_rate()
 
         self.is_visible = True
@@ -553,12 +568,15 @@ class FishMoneyApp:
         return "WORKING_HOURS"
 
     def maybe_rollover_day(self):
-        today = datetime.now().strftime("%Y-%m-%d")
+        now = datetime.now()
+        today = now.strftime("%Y-%m-%d")
         if today != self.current_date:
-            try:
-                DataManager.save(self.current_date, self.earned_money)
-            except Exception:
-                pass
+            if self.settled_date != self.current_date:
+                try:
+                    self.history = DataManager.append_history(self.history, self.current_date, self.earned_money)
+                except Exception:
+                    pass
+                self.settled_date = self.current_date
 
             self.current_date = today
             self.earned_money = 0.0
@@ -571,6 +589,22 @@ class FishMoneyApp:
             self._last_display_text = None
             self._last_color = None
             self._last_alpha = None
+            try:
+                DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
+            except Exception:
+                pass
+
+        if now.time() >= Config.WORK_END and self.settled_date != today:
+            try:
+                self.history = DataManager.append_history(self.history, today, self.earned_money)
+            except Exception:
+                pass
+            self.earned_money = 0.0
+            self.settled_date = today
+            try:
+                DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
+            except Exception:
+                pass
 
     def update_ui_if_needed(self, display_text: str, color: str, alpha: float):
         if display_text == self._last_display_text and color == self._last_color and alpha == self._last_alpha:
@@ -703,7 +737,7 @@ class FishMoneyApp:
         # 定时保存
         if (now_m - self.last_save_time_m) > Config.SAVE_INTERVAL:
             try:
-                DataManager.save(self.current_date, self.earned_money)
+                DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
             except Exception:
                 pass
             self.last_save_time_m = now_m
@@ -780,7 +814,7 @@ class FishMoneyApp:
         self.earned_money = 0.0
         self.lock_start_time_m = None
         try:
-            DataManager.save(self.current_date, self.earned_money)
+            DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
         except Exception:
             pass
         self.lift_soft()
@@ -792,7 +826,7 @@ class FishMoneyApp:
 
     def on_exit(self, event=None):
         try:
-            DataManager.save(self.current_date, self.earned_money)
+            DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
         except Exception:
             pass
         self._stop_tray_icon()
