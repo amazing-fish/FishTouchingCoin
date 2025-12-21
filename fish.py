@@ -415,6 +415,8 @@ class FishMoneyApp:
 
         self.is_paused = False  # —— 右键菜单新增：暂停计费 ——
 
+        self._original_exstyle = None
+
         now_m = time.monotonic()
         self.last_update_time_m = now_m
         self.last_save_time_m = now_m
@@ -456,6 +458,42 @@ class FishMoneyApp:
 
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         self.root.geometry(f"{Config.WINDOW_WIDTH}x{Config.WINDOW_HEIGHT}+{sw-150}+{sh-80}")
+
+    def _update_windows_exstyle(self, to_toolwindow: bool):
+        if os.name != "nt":
+            return
+        try:
+            hwnd = self.root.winfo_id()
+            user32 = ctypes.windll.user32
+            gwl_exstyle = -20
+            ws_ex_appwindow = 0x00040000
+            ws_ex_toolwindow = 0x00000080
+            swp_nomove = 0x0002
+            swp_nosize = 0x0001
+            swp_nozorder = 0x0004
+            swp_framechanged = 0x0020
+            exstyle = user32.GetWindowLongW(hwnd, gwl_exstyle)
+            if self._original_exstyle is None:
+                self._original_exstyle = exstyle
+            if to_toolwindow:
+                new_exstyle = (exstyle & ~ws_ex_appwindow) | ws_ex_toolwindow
+            else:
+                if self._original_exstyle is None:
+                    return
+                new_exstyle = self._original_exstyle
+            if new_exstyle != exstyle:
+                user32.SetWindowLongW(hwnd, gwl_exstyle, new_exstyle)
+                user32.SetWindowPos(
+                    hwnd,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    swp_nomove | swp_nosize | swp_nozorder | swp_framechanged,
+                )
+        except Exception:
+            pass
 
     def create_widgets(self):
         self.canvas = tk.Canvas(
@@ -551,6 +589,10 @@ class FishMoneyApp:
     def on_minimize(self, event):
         # 最小化时收到托盘
         if self.root.state() == "iconic":
+            try:
+                self.root.after_idle(self.root.withdraw)
+            except Exception:
+                pass
             self.hide_to_tray()
 
     def hide_to_tray(self):
@@ -559,6 +601,7 @@ class FishMoneyApp:
 
         self.is_in_tray = True
         self.is_visible = False
+        self._update_windows_exstyle(True)
         self.root.withdraw()
         self._start_tray_icon()
 
@@ -568,6 +611,7 @@ class FishMoneyApp:
 
         self.is_in_tray = False
         self.is_visible = True
+        self._update_windows_exstyle(False)
         self.root.deiconify()
         try:
             self.root.state("normal")
