@@ -27,6 +27,7 @@ class Config:
 
     LUNCH_START = dtime(12, 0)
     LUNCH_END = dtime(14, 0)
+    WORK_START = dtime(9, 0)
     WORK_END = dtime(18, 0)
 
     # 周末摸鱼倍率
@@ -699,14 +700,15 @@ class FishMoneyApp:
 
     def get_time_status(self) -> str:
         now_time = datetime.now().time()
+        if now_time < Config.WORK_START:
+            return "BEFORE_WORK"
         if Config.LUNCH_START <= now_time < Config.LUNCH_END:
             return "LUNCH"
         if now_time >= Config.WORK_END:
             return "OFF_WORK"
         return "WORKING_HOURS"
 
-    def maybe_rollover_day(self):
-        now = datetime.now()
+    def maybe_rollover_day(self, now: datetime, now_m: float, locked_state: bool | None):
         today = now.strftime("%Y-%m-%d")
         if today != self.current_date:
             if self.settled_date != self.current_date:
@@ -718,9 +720,9 @@ class FishMoneyApp:
 
             self.current_date = today
             self.earned_money = 0.0
-            self.lock_start_time_m = None
+            if locked_state is not True:
+                self.lock_start_time_m = None
 
-            now_m = time.monotonic()
             self.last_update_time_m = now_m
             self.last_save_time_m = now_m
 
@@ -761,7 +763,11 @@ class FishMoneyApp:
         self._last_alpha = alpha
 
     def update_loop(self):
-        self.maybe_rollover_day()
+        now_m = time.monotonic()
+        locked_state = SystemUtils.is_workstation_locked()
+        idle_time = SystemUtils.get_idle_time()
+        now = datetime.now()
+        self.maybe_rollover_day(now, now_m, locked_state)
 
         # 老板键：边沿触发
         if SystemUtils.is_key_pressed(Config.BOSS_KEY):
@@ -770,8 +776,6 @@ class FishMoneyApp:
                 self.boss_key_pressed = True
         else:
             self.boss_key_pressed = False
-
-        now_m = time.monotonic()
 
         # —— 4) 置顶：低频兜底（事件驱动为主）——
         self.topmost_fallback_check(now_m)
@@ -792,10 +796,6 @@ class FishMoneyApp:
 
         time_status = self.get_time_status()
 
-        # —— 3) 锁屏三态（True/False/None）——
-        locked_state = SystemUtils.is_workstation_locked()
-        idle_time = SystemUtils.get_idle_time()
-
         display_text = ""
         main_color = Config.COLOR_PAUSED
         alpha = 0.6
@@ -813,7 +813,17 @@ class FishMoneyApp:
             self.root.after(Config.REFRESH_RATE, self.update_loop)
             return
 
-        if time_status == "LUNCH":
+        if time_status == "BEFORE_WORK":
+            display_text = f"🌙 {self.earned_money:.4f}"
+            main_color = Config.COLOR_PAUSED
+            alpha = 0.7
+            if locked_state is True:
+                if self.lock_start_time_m is None:
+                    self.lock_start_time_m = now_m
+            else:
+                self.lock_start_time_m = None
+
+        elif time_status == "LUNCH":
             display_text = f"🍱 {self.earned_money:.4f}"
             main_color = "#FFA500"
             alpha = 0.85
