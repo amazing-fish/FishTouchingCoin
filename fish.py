@@ -416,6 +416,7 @@ class FishMoneyApp:
         self.is_paused = False  # —— 右键菜单新增：暂停计费 ——
 
         self._original_exstyle = None
+        self.is_modal_open = False
 
         now_m = time.monotonic()
         self.last_update_time_m = now_m
@@ -570,7 +571,7 @@ class FishMoneyApp:
 
     # 置顶（柔）：稍后反击，避免和某些窗口疯狂顶牛
     def lift_soft(self):
-        if not self.is_visible or self.is_dragging:
+        if not self.is_visible or self.is_dragging or self.is_modal_open:
             return
         try:
             self.root.after(80, self.lift_once)
@@ -579,7 +580,7 @@ class FishMoneyApp:
 
     # 置顶兜底：低频检查
     def topmost_fallback_check(self, now_m: float):
-        if self.is_dragging or not self.is_visible:
+        if self.is_dragging or not self.is_visible or self.is_modal_open:
             return
         if (now_m - self._last_topmost_fallback_m) < Config.TOPMOST_FALLBACK_CHECK_INTERVAL:
             return
@@ -929,9 +930,20 @@ class FishMoneyApp:
     def open_settings(self):
         # 打开配置：以当前 settings 为初值
         cur = SettingsManager.load_or_none() or SettingsManager.defaults()
-        dlg = SettingsDialog(self.root, cur, title="重新配置")
-        self.root.wait_window(dlg)
-        if dlg.result is None:
+        self.is_modal_open = True
+        was_topmost = self.root.attributes("-topmost")
+        self.root.attributes("-topmost", False)
+        dlg = None
+        try:
+            dlg = SettingsDialog(self.root, cur, title="重新配置")
+            dlg.transient(self.root)
+            dlg.wait_visibility()
+            dlg.focus_force()
+            self.root.wait_window(dlg)
+        finally:
+            self.is_modal_open = False
+            self.root.attributes("-topmost", was_topmost)
+        if dlg is None or dlg.result is None:
             return
 
         try:
