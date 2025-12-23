@@ -16,6 +16,8 @@ from PIL import Image
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
+    APP_VERSION = "v0.2.8 refactor"
+
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0
     WORK_DAYS_PER_MONTH = 21.75
@@ -49,8 +51,12 @@ class Config:
     BOSS_KEY = 0x78  # F9
 
     # 数据文件
-    DATA_FILE_NAME = "fish_data_v1.5.json"
-    SETTINGS_FILE_NAME = "fish_settings_v1.json"
+    DATA_SCHEMA_VERSION = 1
+    SETTINGS_SCHEMA_VERSION = 1
+    DATA_FILE_NAME = f"data_schema_v{DATA_SCHEMA_VERSION}.json"
+    SETTINGS_FILE_NAME = f"settings_schema_v{SETTINGS_SCHEMA_VERSION}.json"
+    LEGACY_DATA_FILE_NAMES = ["fish_data_v1.5.json"]
+    LEGACY_SETTINGS_FILE_NAMES = ["fish_settings_v1.json"]
 
     # 稳定性参数
     MAX_DELTA = 1.0
@@ -88,22 +94,35 @@ class StoragePaths:
         return os.path.join(StoragePaths.ensure_dir(), Config.SETTINGS_FILE_NAME)
 
     @staticmethod
-    def legacy_data_file() -> str:
-        return os.path.abspath(Config.DATA_FILE_NAME)
+    def legacy_data_files() -> list[str]:
+        return StoragePaths._legacy_files(Config.LEGACY_DATA_FILE_NAMES)
 
     @staticmethod
-    def legacy_settings_file() -> str:
-        return os.path.abspath(Config.SETTINGS_FILE_NAME)
+    def legacy_settings_files() -> list[str]:
+        return StoragePaths._legacy_files(Config.LEGACY_SETTINGS_FILE_NAMES)
 
     @staticmethod
-    def migrate_legacy_file(legacy_path: str, target_path: str):
-        if os.path.exists(target_path) or not os.path.exists(legacy_path):
+    def _legacy_files(file_names: list[str]) -> list[str]:
+        legacy_paths = []
+        data_dir = StoragePaths.ensure_dir()
+        for name in file_names:
+            legacy_paths.append(os.path.abspath(name))
+            legacy_paths.append(os.path.join(data_dir, name))
+        return legacy_paths
+
+    @staticmethod
+    def migrate_legacy_files(legacy_paths: list[str], target_path: str):
+        if os.path.exists(target_path):
             return
-        try:
-            os.makedirs(os.path.dirname(target_path), exist_ok=True)
-            os.replace(legacy_path, target_path)
-        except Exception:
-            pass
+        for legacy_path in legacy_paths:
+            if not os.path.exists(legacy_path):
+                continue
+            try:
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                os.replace(legacy_path, target_path)
+                return
+            except Exception:
+                pass
 
 
 # ==========================================
@@ -127,7 +146,7 @@ class SettingsManager:
     @staticmethod
     def load_or_none() -> dict | None:
         settings_file = StoragePaths.settings_file()
-        StoragePaths.migrate_legacy_file(StoragePaths.legacy_settings_file(), settings_file)
+        StoragePaths.migrate_legacy_files(StoragePaths.legacy_settings_files(), settings_file)
         if not os.path.exists(settings_file):
             return None
         try:
@@ -346,7 +365,7 @@ class DataManager:
     def load():
         today = DataManager._today_str()
         data_file = StoragePaths.data_file()
-        StoragePaths.migrate_legacy_file(StoragePaths.legacy_data_file(), data_file)
+        StoragePaths.migrate_legacy_files(StoragePaths.legacy_data_files(), data_file)
         if not os.path.exists(data_file):
             return today, 0.0, "", {}
 
@@ -354,6 +373,7 @@ class DataManager:
             with open(data_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
+            _ = data.get("schema_version", Config.DATA_SCHEMA_VERSION)
             file_date = data.get("date") or today
             money = float(data.get("money", 0.0))
             settled_date = data.get("settled_date", "")
@@ -372,6 +392,7 @@ class DataManager:
     @staticmethod
     def save(date_str: str, money: float, settled_date: str, history: dict[str, float]):
         data = {
+            "schema_version": Config.DATA_SCHEMA_VERSION,
             "date": date_str,
             "money": float(money),
             "settled_date": settled_date,
