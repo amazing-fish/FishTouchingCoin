@@ -432,6 +432,8 @@ class FishMoneyApp:
         # 置顶：事件驱动为主 + 低频兜底
         self._last_topmost_fallback_m = 0.0
 
+        self.details_window = None
+
         # 拖动
         self.is_dragging = False
         self.drag_offset_x = 0
@@ -663,10 +665,33 @@ class FishMoneyApp:
             return Image.new("RGB", (64, 64), Config.BG_KEY_COLOR)
 
     def open_details(self):
+        if self.details_window is not None:
+            try:
+                if self.details_window.winfo_exists():
+                    self.details_window.deiconify()
+                    self.details_window.lift()
+                    self.details_window.focus_force()
+                    return
+            except Exception:
+                pass
+            self.details_window = None
+
         details = tk.Toplevel(self.root)
+        self.details_window = details
         details.title("详情")
         details.resizable(False, False)
         details.attributes("-topmost", True)
+
+        def on_details_destroy(event=None):
+            if event is None or event.widget is details:
+                self.details_window = None
+
+        def on_details_close():
+            on_details_destroy()
+            details.destroy()
+
+        details.protocol("WM_DELETE_WINDOW", on_details_close)
+        details.bind("<Destroy>", on_details_destroy)
 
         now = datetime.now()
         data_map = dict(self.history)
