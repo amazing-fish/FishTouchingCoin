@@ -17,7 +17,7 @@ from PIL import Image
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.2.9 refactor"
+    APP_VERSION = "v0.2.10 bugfix"
 
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0
@@ -1027,6 +1027,11 @@ class FishMoneyApp:
         self.lift_soft()
 
     def open_settings(self):
+        self.root.after(0, self._open_settings_dialog)
+
+    def _open_settings_dialog(self):
+        if self.is_modal_open:
+            return
         # 打开配置：以当前 settings 为初值
         cur = SettingsManager.load_or_none() or SettingsManager.defaults()
         self.is_modal_open = True
@@ -1041,6 +1046,13 @@ class FishMoneyApp:
             self.root.wait_window(dlg)
         finally:
             self.is_modal_open = False
+            try:
+                if dlg is not None:
+                    dlg.grab_release()
+                elif self.root.grab_current() is not None:
+                    self.root.grab_release()
+            except Exception:
+                pass
             self.root.attributes("-topmost", was_topmost)
         if dlg is None or dlg.result is None:
             return
