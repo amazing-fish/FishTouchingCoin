@@ -5,6 +5,7 @@ from ctypes import wintypes
 import time
 import json
 import os
+import logging
 from datetime import datetime, time as dtime, timedelta
 import threading
 
@@ -16,7 +17,7 @@ from PIL import Image
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.2.8 refactor"
+    APP_VERSION = "v0.2.9 refactor"
 
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0
@@ -61,6 +62,7 @@ class Config:
     # 稳定性参数
     MAX_DELTA = 1.0
     SAVE_INTERVAL = 10.0
+    HISTORY_RETENTION_DAYS = 365
 
     # 置顶兜底检查（很低频，避免顶牛）
     TOPMOST_FALLBACK_CHECK_INTERVAL = 2.0
@@ -357,9 +359,28 @@ class SystemUtils:
 # 数据管理（原子写 + 损坏备份）
 # ==========================================
 class DataManager:
+    _logger = logging.getLogger(__name__)
+
     @staticmethod
     def _today_str() -> str:
         return datetime.now().strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _prune_history(history: dict[str, float], now: datetime | None = None) -> dict[str, float]:
+        if not history:
+            return history
+        now = now or datetime.now()
+        cutoff_date = now.date() - timedelta(days=Config.HISTORY_RETENTION_DAYS - 1)
+        pruned: dict[str, float] = {}
+        for date_key, value in history.items():
+            try:
+                parsed_date = datetime.strptime(date_key, "%Y-%m-%d").date()
+            except Exception:
+                pruned[date_key] = float(value)
+                continue
+            if parsed_date >= cutoff_date:
+                pruned[date_key] = float(value)
+        return pruned
 
     @staticmethod
     def load():
@@ -391,26 +412,31 @@ class DataManager:
 
     @staticmethod
     def save(date_str: str, money: float, settled_date: str, history: dict[str, float]):
-        data = {
-            "schema_version": Config.DATA_SCHEMA_VERSION,
-            "date": date_str,
-            "money": float(money),
-            "settled_date": settled_date,
-            "history": history,
-        }
-        data_file = StoragePaths.data_file()
-        tmp = data_file + ".tmp"
+        try:
+            pruned_history = DataManager._prune_history(history)
+            data = {
+                "schema_version": Config.DATA_SCHEMA_VERSION,
+                "date": date_str,
+                "money": float(money),
+                "settled_date": settled_date,
+                "history": pruned_history,
+            }
+            data_file = StoragePaths.data_file()
+            tmp = data_file + ".tmp"
 
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, data_file)
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, data_file)
+        except Exception:
+            DataManager._logger.exception("保存数据失败")
+            raise
 
     @staticmethod
     def append_history(history: dict[str, float], date_str: str, money: float) -> dict[str, float]:
         history[str(date_str)] = float(money)
-        return history
+        return DataManager._prune_history(history)
 
 
 # ==========================================
@@ -449,6 +475,9 @@ class FishMoneyApp:
         self._last_display_text = None
         self._last_color = None
         self._last_alpha = None
+
+        self.is_dirty = False
+        self.save_requested = False
 
         # 置顶：事件驱动为主 + 低频兜底
         self._last_topmost_fallback_m = 0.0
@@ -763,6 +792,7 @@ class FishMoneyApp:
                 except Exception:
                     pass
                 self.settled_date = self.current_date
+                self.mark_dirty(request_save=True)
 
             self.current_date = today
             self.earned_money = 0.0
@@ -775,10 +805,7 @@ class FishMoneyApp:
             self._last_display_text = None
             self._last_color = None
             self._last_alpha = None
-            try:
-                DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
-            except Exception:
-                pass
+            self.mark_dirty(request_save=True)
 
         if now.time() >= Config.WORK_END and self.settled_date != today:
             try:
@@ -786,10 +813,24 @@ class FishMoneyApp:
             except Exception:
                 pass
             self.settled_date = today
+            self.mark_dirty(request_save=True)
+
+    def mark_dirty(self, request_save: bool = False):
+        self.is_dirty = True
+        if request_save:
+            self.save_requested = True
+
+    def maybe_save(self, now_m: float):
+        if not (self.is_dirty or self.save_requested):
+            return
+        if self.save_requested or (now_m - self.last_save_time_m) > Config.SAVE_INTERVAL:
             try:
                 DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
             except Exception:
-                pass
+                return
+            self.is_dirty = False
+            self.save_requested = False
+            self.last_save_time_m = now_m
 
     def update_ui_if_needed(self, display_text: str, color: str, alpha: float):
         if display_text == self._last_display_text and color == self._last_color and alpha == self._last_alpha:
@@ -829,6 +870,7 @@ class FishMoneyApp:
         # 隐藏时：不计费，防 delta 爆炸
         if not self.is_visible:
             self.last_update_time_m = now_m
+            self.maybe_save(now_m)
             self.root.after(Config.REFRESH_RATE, self.update_loop)
             return
 
@@ -849,6 +891,8 @@ class FishMoneyApp:
         mult = self.get_rate_multiplier()
         rate = self.base_salary_per_second * mult
 
+        earned_before = self.earned_money
+
         # 暂停：任何状态都不加钱，但仍显示
         if self.is_paused:
             display_text = f"⏸ {self.earned_money:.4f}"
@@ -856,6 +900,9 @@ class FishMoneyApp:
             alpha = 0.75
             self.lock_start_time_m = None
             self.update_ui_if_needed(display_text, main_color, alpha)
+            if self.earned_money != earned_before:
+                self.mark_dirty()
+            self.maybe_save(now_m)
             self.root.after(Config.REFRESH_RATE, self.update_loop)
             return
 
@@ -927,13 +974,9 @@ class FishMoneyApp:
 
         self.update_ui_if_needed(display_text, main_color, alpha)
 
-        # 定时保存
-        if (now_m - self.last_save_time_m) > Config.SAVE_INTERVAL:
-            try:
-                DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
-            except Exception:
-                pass
-            self.last_save_time_m = now_m
+        if self.earned_money != earned_before:
+            self.mark_dirty()
+        self.maybe_save(now_m)
 
         self.root.after(Config.REFRESH_RATE, self.update_loop)
 
