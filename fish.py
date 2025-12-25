@@ -17,7 +17,7 @@ from PIL import Image
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.2.10 bugfix"
+    APP_VERSION = "v0.2.11 bugfix"
 
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0
@@ -483,6 +483,9 @@ class FishMoneyApp:
         self._last_topmost_fallback_m = 0.0
 
         self.details_window = None
+        self._details_opening = False
+        self.settings_dialog = None
+        self._settings_opening = False
 
         # 拖动
         self.is_dragging = False
@@ -726,6 +729,10 @@ class FishMoneyApp:
                 pass
             self.details_window = None
 
+        if self._details_opening:
+            return
+        self._details_opening = True
+
         details = tk.Toplevel(self.root)
         self.details_window = details
         details.title("详情")
@@ -735,6 +742,7 @@ class FishMoneyApp:
         def on_details_destroy(event=None):
             if event is None or event.widget is details:
                 self.details_window = None
+                self._details_opening = False
 
         def on_details_close():
             on_details_destroy()
@@ -742,6 +750,7 @@ class FishMoneyApp:
 
         details.protocol("WM_DELETE_WINDOW", on_details_close)
         details.bind("<Destroy>", on_details_destroy)
+        self._details_opening = False
 
         now = datetime.now()
         data_map = dict(self.history)
@@ -1027,10 +1036,26 @@ class FishMoneyApp:
         self.lift_soft()
 
     def open_settings(self):
+        if self.settings_dialog is not None:
+            try:
+                if self.settings_dialog.winfo_exists():
+                    self.settings_dialog.deiconify()
+                    self.settings_dialog.lift()
+                    self.settings_dialog.focus_force()
+                    return
+            except Exception:
+                pass
+            self.settings_dialog = None
+
+        if self._settings_opening:
+            return
+
+        self._settings_opening = True
         self.root.after(0, self._open_settings_dialog)
 
     def _open_settings_dialog(self):
         if self.is_modal_open:
+            self._settings_opening = False
             return
         # 打开配置：以当前 settings 为初值
         cur = SettingsManager.load_or_none() or SettingsManager.defaults()
@@ -1040,32 +1065,52 @@ class FishMoneyApp:
         dlg = None
         try:
             dlg = SettingsDialog(self.root, cur, title="重新配置")
+            self.settings_dialog = dlg
             dlg.transient(self.root)
             dlg.wait_visibility()
             dlg.focus_force()
-            self.root.wait_window(dlg)
-        finally:
+
+            def finalize_dialog(event=None):
+                if event is not None and event.widget is not dlg:
+                    return
+                self.is_modal_open = False
+                self._settings_opening = False
+                self.settings_dialog = None
+                try:
+                    if dlg.grab_current() is not None:
+                        dlg.grab_release()
+                    elif self.root.grab_current() is not None:
+                        self.root.grab_release()
+                except Exception:
+                    pass
+                self.root.attributes("-topmost", was_topmost)
+
+                if dlg.result is None:
+                    return
+
+                try:
+                    SettingsManager.save(dlg.result)
+                    SettingsManager.apply_to_config(dlg.result)
+                    self.base_salary_per_second = self.calculate_base_rate()
+                    # 配置变了，避免锁屏计时残留
+                    self.lock_start_time_m = None
+                    self.lift_soft()
+                except Exception as e:
+                    messagebox.showerror("保存失败", str(e), parent=self.root)
+
+            dlg.bind("<Destroy>", finalize_dialog)
+        except Exception:
             self.is_modal_open = False
+            self._settings_opening = False
+            self.settings_dialog = None
             try:
-                if dlg is not None:
+                if dlg is not None and dlg.grab_current() is not None:
                     dlg.grab_release()
                 elif self.root.grab_current() is not None:
                     self.root.grab_release()
             except Exception:
                 pass
             self.root.attributes("-topmost", was_topmost)
-        if dlg is None or dlg.result is None:
-            return
-
-        try:
-            SettingsManager.save(dlg.result)
-            SettingsManager.apply_to_config(dlg.result)
-            self.base_salary_per_second = self.calculate_base_rate()
-            # 配置变了，避免锁屏计时残留
-            self.lock_start_time_m = None
-            self.lift_soft()
-        except Exception as e:
-            messagebox.showerror("保存失败", str(e), parent=self.root)
 
     def reset_today(self):
         if not messagebox.askyesno("确认", "确定要把今日金额清零吗？", parent=self.root):
