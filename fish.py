@@ -17,7 +17,7 @@ from PIL import Image
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.2.10 bugfix"
+    APP_VERSION = "v0.2.11 bugfix"
 
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0
@@ -225,9 +225,15 @@ class SettingsDialog(tk.Toplevel):
 
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
 
-        # 模态
-        self.grab_set()
-        self.focus_force()
+        # 模态（延迟到窗口可见后再 grab，避免菜单残留 grab 导致弹窗闪退）
+        self.after_idle(self._activate_modal)
+
+    def _activate_modal(self):
+        try:
+            self.grab_set()
+            self.focus_force()
+        except tk.TclError:
+            pass
 
     def _build_ui(self):
         pad = 10
@@ -483,6 +489,7 @@ class FishMoneyApp:
         self._last_topmost_fallback_m = 0.0
 
         self.details_window = None
+        self.details_opening = False
 
         # 拖动
         self.is_dragging = False
@@ -725,23 +732,28 @@ class FishMoneyApp:
             except Exception:
                 pass
             self.details_window = None
+        if self.details_opening:
+            return
+        self.details_opening = True
+        try:
+            details = tk.Toplevel(self.root)
+            self.details_window = details
+            details.title("详情")
+            details.resizable(False, False)
+            details.attributes("-topmost", True)
 
-        details = tk.Toplevel(self.root)
-        self.details_window = details
-        details.title("详情")
-        details.resizable(False, False)
-        details.attributes("-topmost", True)
+            def on_details_destroy(event=None):
+                if event is None or event.widget is details:
+                    self.details_window = None
 
-        def on_details_destroy(event=None):
-            if event is None or event.widget is details:
-                self.details_window = None
+            def on_details_close():
+                on_details_destroy()
+                details.destroy()
 
-        def on_details_close():
-            on_details_destroy()
-            details.destroy()
-
-        details.protocol("WM_DELETE_WINDOW", on_details_close)
-        details.bind("<Destroy>", on_details_destroy)
+            details.protocol("WM_DELETE_WINDOW", on_details_close)
+            details.bind("<Destroy>", on_details_destroy)
+        finally:
+            self.details_opening = False
 
         now = datetime.now()
         data_map = dict(self.history)
