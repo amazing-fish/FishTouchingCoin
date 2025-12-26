@@ -17,7 +17,7 @@ from PIL import Image
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.2.11 bugfix"
+    APP_VERSION = "v0.2.12 bugfix"
 
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0
@@ -471,6 +471,8 @@ class FishMoneyApp:
 
         self._original_exstyle = None
         self.is_modal_open = False
+        self.settings_dialog = None
+        self._settings_opening = False
 
         now_m = time.monotonic()
         self.last_update_time_m = now_m
@@ -1029,16 +1031,26 @@ class FishMoneyApp:
         try:
             self.menu.tk_popup(event.x_root, event.y_root)
         finally:
-            try:
-                self.menu.grab_release()
-            except Exception:
-                pass
+            self._release_grab()
+
+    def _release_grab(self):
+        try:
+            grab_widget = self.root.grab_current()
+        except Exception:
+            grab_widget = None
+        if grab_widget is None:
+            return
+        try:
+            grab_widget.grab_release()
+        except Exception:
+            pass
 
     def toggle_pause(self):
         self.is_paused = not self.is_paused
         self.lift_soft()
 
     def open_settings(self):
+        self._release_grab()
         if self.settings_dialog is not None:
             try:
                 if self.settings_dialog.winfo_exists():
@@ -1054,7 +1066,7 @@ class FishMoneyApp:
             return
 
         self._settings_opening = True
-        self.root.after(0, self._open_settings_dialog)
+        self.root.after_idle(self._open_settings_dialog)
 
     def _open_settings_dialog(self):
         if self.is_modal_open:
