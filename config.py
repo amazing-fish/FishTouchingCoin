@@ -9,8 +9,8 @@ from datetime import datetime, time as dtime
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.3.1"
-    APP_VERSION_TYPE = "refactor"
+    APP_VERSION = "v0.3.2"
+    APP_VERSION_TYPE = "bugfix"
 
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0
@@ -249,6 +249,13 @@ class SettingsDialog(tk.Toplevel):
             le = SettingsManager._parse_hhmm(s["LUNCH_END"])
             if not (ls < le):
                 raise ValueError("午休开始必须早于午休结束")
+            we = SettingsManager._parse_hhmm(s["WORK_END"])
+            if not (Config.WORK_START < we):
+                raise ValueError("下班时间必须晚于上班时间")
+            if not (ls >= Config.WORK_START):
+                raise ValueError("午休开始必须晚于上班时间")
+            if not (le <= we):
+                raise ValueError("午休结束必须早于下班时间")
 
             self.result = s
             self.destroy()
