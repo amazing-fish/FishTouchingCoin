@@ -1,5 +1,8 @@
 # Anchor 文档
 
+## 版本规范
+- 版本号采用 `v主.次.修`，并在修改日志中标注 `feature/refactor/bugfix` 类型。
+
 ## 技术路径
 - 最小化事件通过 Tk `Unmap` 监听，检测窗口进入 `iconic` 状态即隐藏窗口。
 - Windows 端托盘化时用 `GetWindowLongW/SetWindowLongW` 清除 `WS_EX_APPWINDOW` 并设置 `WS_EX_TOOLWINDOW`，恢复显示时还原扩展样式避免影响 Alt-Tab。
@@ -25,6 +28,7 @@
 - v0.2.11 bugfix: 详情弹窗增加打开中保护避免重复实例；配置弹窗延迟 grab 以降低闪退与卡死风险。
 - v0.2.12 bugfix: 右键菜单与配置弹窗统一释放 grab，避免闪退/卡死与重复打开异常。
 - v0.3.0 refactor: 拆分配置、存储、系统调用与 UI 逻辑模块，入口保持原有启动流程。
+- v0.3.1 refactor: 优化 README 与 Anchor 文档结构说明。
 
 ## 后续规划思考
 - 结合 `maybe_rollover_day` 的日期滚动，在每日早间启动时自动清零当日金额并保存前一日记录，确保统计口径清晰。
