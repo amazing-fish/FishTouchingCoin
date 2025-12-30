@@ -272,6 +272,19 @@ class FishMoneyUI:
 
         max_value = max((value for _, _, value in days), default=0.0)
         usage_map = dict(getattr(self, "last_after_work_usage", {}) or {})
+        latest_time = None
+        latest_day = None
+        for day_str, _, _ in days:
+            time_str = usage_map.get(day_str)
+            if not time_str:
+                continue
+            try:
+                parsed = datetime.strptime(time_str, "%H:%M").time()
+            except Exception:
+                continue
+            if latest_time is None or parsed > latest_time:
+                latest_time = parsed
+                latest_day = day_str
 
         trend_card = tk.Frame(
             container,
@@ -349,15 +362,17 @@ class FishMoneyUI:
                     outline=bar_color,
                 )
 
-            tk.Label(
-                row,
-                text=f"下班 {time_str or '--:--'}",
-                width=9,
-                anchor="e",
-                font=(Config.FONT_FAMILY, Config.FONT_SIZE),
-                bg=section_bg,
-                fg=text_muted,
-            ).pack(side="right", padx=(8, 0))
+            if time_str:
+                time_color = "#2563EB" if day_str == latest_day else text_muted
+                tk.Label(
+                    row,
+                    text=f"下班 {time_str}",
+                    width=9,
+                    anchor="e",
+                    font=(Config.FONT_FAMILY, Config.FONT_SIZE),
+                    bg=section_bg,
+                    fg=time_color,
+                ).pack(side="right", padx=(8, 0))
 
     # 拖动
     def start_move(self, event):
