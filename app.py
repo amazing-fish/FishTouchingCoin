@@ -21,6 +21,7 @@ class FishMoneyApp(FishMoneyUI):
             self.earned_money,
             self.settled_date,
             self.history,
+            self.last_after_work_usage,
         ) = DataManager.load()
         self.base_salary_per_second = self.calculate_base_rate()
 
@@ -129,7 +130,13 @@ class FishMoneyApp(FishMoneyUI):
             return
         if self.save_requested or (now_m - self.last_save_time_m) > Config.SAVE_INTERVAL:
             try:
-                DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
+                DataManager.save(
+                    self.current_date,
+                    self.earned_money,
+                    self.settled_date,
+                    self.history,
+                    self.last_after_work_usage,
+                )
             except Exception:
                 return
             self.is_dirty = False
@@ -187,6 +194,7 @@ class FishMoneyApp(FishMoneyUI):
             delta = Config.MAX_DELTA
 
         time_status = self.get_time_status()
+        self.maybe_update_last_after_work_usage(time_status, now, idle_time, locked_state)
 
         display_text = ""
         main_color = Config.COLOR_PAUSED
@@ -293,6 +301,25 @@ class FishMoneyApp(FishMoneyUI):
         self._last_topmost_fallback_m = now_m
         # 不做频繁反复 set topmost，只偶尔 lift 一次
         self.lift_soft()
+
+    def maybe_update_last_after_work_usage(
+        self,
+        time_status: str,
+        now: datetime,
+        idle_time: float,
+        locked_state: bool | None,
+    ):
+        if time_status != "OFF_WORK":
+            return
+        if locked_state is True:
+            return
+        if idle_time >= Config.IDLE_THRESHOLD:
+            return
+        today = now.strftime("%Y-%m-%d")
+        time_str = now.strftime("%H:%M")
+        if self.last_after_work_usage.get(today) != time_str:
+            self.last_after_work_usage[today] = time_str
+            self.mark_dirty()
 
 
 def main():

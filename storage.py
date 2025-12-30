@@ -76,21 +76,28 @@ class DataManager:
         return datetime.now().strftime("%Y-%m-%d")
 
     @staticmethod
-    def _prune_history(history: dict[str, float], now: datetime | None = None) -> dict[str, float]:
+    def _prune_date_map(
+        history: dict[str, float] | dict[str, str], now: datetime | None = None
+    ) -> dict[str, float] | dict[str, str]:
         if not history:
             return history
         now = now or datetime.now()
         cutoff_date = now.date() - timedelta(days=Config.HISTORY_RETENTION_DAYS - 1)
-        pruned: dict[str, float] = {}
+        pruned: dict[str, float] | dict[str, str] = {}
         for date_key, value in history.items():
             try:
                 parsed_date = datetime.strptime(date_key, "%Y-%m-%d").date()
             except Exception:
-                pruned[date_key] = float(value)
+                pruned[date_key] = value
                 continue
             if parsed_date >= cutoff_date:
-                pruned[date_key] = float(value)
+                pruned[date_key] = value
         return pruned
+
+    @staticmethod
+    def _prune_history(history: dict[str, float], now: datetime | None = None) -> dict[str, float]:
+        pruned = DataManager._prune_date_map(history, now)
+        return {date_key: float(value) for date_key, value in pruned.items()}
 
     @staticmethod
     def load():
@@ -98,7 +105,7 @@ class DataManager:
         data_file = StoragePaths.data_file()
         StoragePaths.migrate_legacy_files(StoragePaths.legacy_data_files(), data_file)
         if not os.path.exists(data_file):
-            return today, 0.0, "", {}
+            return today, 0.0, "", {}, {}
 
         try:
             with open(data_file, "r", encoding="utf-8") as f:
@@ -109,8 +116,9 @@ class DataManager:
             money = float(data.get("money", 0.0))
             settled_date = data.get("settled_date", "")
             history = data.get("history", {})
+            last_after_work_usage = data.get("last_after_work_usage", {})
 
-            return file_date, money, settled_date, history
+            return file_date, money, settled_date, history, last_after_work_usage
 
         except Exception:
             try:
@@ -118,18 +126,26 @@ class DataManager:
                 os.replace(data_file, f"{data_file}.corrupt.{ts}")
             except Exception:
                 pass
-            return today, 0.0, "", {}
+            return today, 0.0, "", {}, {}
 
     @staticmethod
-    def save(date_str: str, money: float, settled_date: str, history: dict[str, float]):
+    def save(
+        date_str: str,
+        money: float,
+        settled_date: str,
+        history: dict[str, float],
+        last_after_work_usage: dict[str, str],
+    ):
         try:
             pruned_history = DataManager._prune_history(history)
+            pruned_last_usage = DataManager._prune_date_map(last_after_work_usage)
             data = {
                 "schema_version": Config.DATA_SCHEMA_VERSION,
                 "date": date_str,
                 "money": float(money),
                 "settled_date": settled_date,
                 "history": pruned_history,
+                "last_after_work_usage": pruned_last_usage,
             }
             data_file = StoragePaths.data_file()
             tmp = data_file + ".tmp"
