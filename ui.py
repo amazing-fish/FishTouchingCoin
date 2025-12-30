@@ -448,15 +448,30 @@ class FishMoneyUI:
             except Exception:
                 pass
             self.menu.tk_popup(event.x_root, event.y_root)
+            self.root.after_idle(self._focus_menu)
         finally:
             self._release_grab()
 
     def _menu_action(self, action):
         def handler():
-            self._close_menu()
-            action()
+            try:
+                action()
+            finally:
+                self.root.after_idle(self._close_menu)
 
         return handler
+
+    def _focus_menu(self):
+        try:
+            self.menu.focus_set()
+            try:
+                active_index = self.menu.index("active")
+            except Exception:
+                active_index = None
+            if active_index is None:
+                self.menu.activate(0)
+        except Exception:
+            pass
 
     def _close_menu(self):
         try:
