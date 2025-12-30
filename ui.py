@@ -106,13 +106,33 @@ class FishMoneyUI:
             activeborderwidth=0,
         )
         menu_font = (Config.FONT_FAMILY, Config.FONT_SIZE)
-        self.menu.add_command(label="暂停计费", command=self.toggle_pause, font=menu_font)
+        self.menu.add_command(
+            label="暂停计费",
+            command=self._menu_action(self.toggle_pause),
+            font=menu_font,
+        )
         self.menu_pause_index = 0
-        self.menu.add_command(label="详情", command=self.open_details, font=menu_font)
-        self.menu.add_command(label="重新配置…", command=self.open_settings, font=menu_font)
-        self.menu.add_command(label="重置今日金额", command=self.reset_today, font=menu_font)
+        self.menu.add_command(
+            label="详情",
+            command=self._menu_action(self.open_details),
+            font=menu_font,
+        )
+        self.menu.add_command(
+            label="重新配置…",
+            command=self._menu_action(self.open_settings),
+            font=menu_font,
+        )
+        self.menu.add_command(
+            label="重置今日金额",
+            command=self._menu_action(self.reset_today),
+            font=menu_font,
+        )
         self.menu.add_separator()
-        self.menu.add_command(label="退出", command=self.confirm_exit, font=menu_font)
+        self.menu.add_command(
+            label="退出",
+            command=self._menu_action(self.confirm_exit),
+            font=menu_font,
+        )
         self.menu.configure(selectcolor=Config.MENU_ACTIVE_BG)
 
     def bind_events(self):
@@ -430,6 +450,24 @@ class FishMoneyUI:
             self.menu.tk_popup(event.x_root, event.y_root)
         finally:
             self._release_grab()
+
+    def _menu_action(self, action):
+        def handler():
+            self._close_menu()
+            action()
+
+        return handler
+
+    def _close_menu(self):
+        try:
+            self.menu.unpost()
+        except Exception:
+            pass
+        self._release_grab()
+        try:
+            self.root.focus_force()
+        except Exception:
+            pass
 
     def _release_grab(self):
         try:
