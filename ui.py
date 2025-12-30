@@ -94,13 +94,26 @@ class FishMoneyUI:
 
     # —— 5) 右键菜单 ——
     def create_context_menu(self):
-        self.menu = tk.Menu(self.root, tearoff=0)
-        self.menu.add_command(label="暂停/继续", command=self.toggle_pause)
-        self.menu.add_command(label="详情", command=self.open_details)
-        self.menu.add_command(label="重新配置…", command=self.open_settings)
-        self.menu.add_command(label="重置今日金额", command=self.reset_today)
+        self.menu = tk.Menu(
+            self.root,
+            tearoff=0,
+            bg=Config.MENU_BG,
+            fg=Config.MENU_FG,
+            activebackground=Config.MENU_ACTIVE_BG,
+            activeforeground=Config.MENU_ACTIVE_FG,
+            relief="solid",
+            bd=1,
+            activeborderwidth=0,
+        )
+        menu_font = (Config.FONT_FAMILY, Config.FONT_SIZE)
+        self.menu.add_command(label="暂停计费", command=self.toggle_pause, font=menu_font)
+        self.menu_pause_index = 0
+        self.menu.add_command(label="详情", command=self.open_details, font=menu_font)
+        self.menu.add_command(label="重新配置…", command=self.open_settings, font=menu_font)
+        self.menu.add_command(label="重置今日金额", command=self.reset_today, font=menu_font)
         self.menu.add_separator()
-        self.menu.add_command(label="退出", command=self.confirm_exit)
+        self.menu.add_command(label="退出", command=self.confirm_exit, font=menu_font)
+        self.menu.configure(selectcolor=Config.MENU_ACTIVE_BG)
 
     def bind_events(self):
         # 拖动：左键
@@ -409,6 +422,11 @@ class FishMoneyUI:
     # —— 5) 右键菜单动作 ——
     def show_menu(self, event):
         try:
+            label = "继续计费" if self.is_paused else "暂停计费"
+            try:
+                self.menu.entryconfigure(self.menu_pause_index, label=label)
+            except Exception:
+                pass
             self.menu.tk_popup(event.x_root, event.y_root)
         finally:
             self._release_grab()
