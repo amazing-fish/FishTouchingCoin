@@ -106,13 +106,13 @@ class FishMoneyUI:
             activeborderwidth=0,
         )
         menu_font = (Config.FONT_FAMILY, Config.FONT_SIZE)
-        self.menu.add_command(label="暂停计费", command=self.toggle_pause, font=menu_font, padx=12, pady=4)
+        self.menu.add_command(label="暂停计费", command=self.toggle_pause, font=menu_font)
         self.menu_pause_index = 0
-        self.menu.add_command(label="详情", command=self.open_details, font=menu_font, padx=12, pady=4)
-        self.menu.add_command(label="重新配置…", command=self.open_settings, font=menu_font, padx=12, pady=4)
-        self.menu.add_command(label="重置今日金额", command=self.reset_today, font=menu_font, padx=12, pady=4)
+        self.menu.add_command(label="详情", command=self.open_details, font=menu_font)
+        self.menu.add_command(label="重新配置…", command=self.open_settings, font=menu_font)
+        self.menu.add_command(label="重置今日金额", command=self.reset_today, font=menu_font)
         self.menu.add_separator()
-        self.menu.add_command(label="退出", command=self.confirm_exit, font=menu_font, padx=12, pady=4)
+        self.menu.add_command(label="退出", command=self.confirm_exit, font=menu_font)
         self.menu.configure(selectcolor=Config.MENU_ACTIVE_BG)
 
     def bind_events(self):
