@@ -1,10 +1,12 @@
+import atexit
 import time
 from datetime import datetime
 
 import tkinter as tk
+from tkinter import messagebox
 
 from config import Config, SettingsDialog, SettingsManager
-from storage import DataManager
+from storage import DataManager, InstanceLock, StoragePaths
 from system_utils import SystemUtils
 from ui import FishMoneyUI
 
@@ -322,7 +324,26 @@ class FishMoneyApp(FishMoneyUI):
             self.mark_dirty()
 
 
+def ensure_single_instance() -> InstanceLock | None:
+    lock = InstanceLock(StoragePaths.instance_lock_file())
+    if lock.acquire():
+        atexit.register(lock.release)
+        return lock
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showinfo("已在运行", "程序已在运行，请先关闭现有实例。")
+        root.destroy()
+    except Exception:
+        pass
+    return None
+
+
 def main():
+    instance_lock = ensure_single_instance()
+    if instance_lock is None:
+        return
+
     root = tk.Tk()
     root.withdraw()  # 先隐藏主窗体，避免闪一下
 

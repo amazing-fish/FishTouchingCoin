@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta
 
 from config import Config
+from system_utils import SystemUtils
 
 
 # ==========================================
@@ -32,6 +33,10 @@ class StoragePaths:
     @staticmethod
     def settings_file() -> str:
         return os.path.join(StoragePaths.ensure_dir(), Config.SETTINGS_FILE_NAME)
+
+    @staticmethod
+    def instance_lock_file() -> str:
+        return os.path.join(StoragePaths.ensure_dir(), "app.lock")
 
     @staticmethod
     def legacy_data_files() -> list[str]:
@@ -163,3 +168,47 @@ class DataManager:
     def append_history(history: dict[str, float], date_str: str, money: float) -> dict[str, float]:
         history[str(date_str)] = float(money)
         return DataManager._prune_history(history)
+
+
+class InstanceLock:
+    def __init__(self, path: str):
+        self.path = path
+        self.fd: int | None = None
+
+    def acquire(self) -> bool:
+        while True:
+            try:
+                self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(self.fd, str(os.getpid()).encode("utf-8"))
+                os.fsync(self.fd)
+                return True
+            except FileExistsError:
+                pid = self._read_pid()
+                if pid is not None and SystemUtils.is_process_alive(pid):
+                    return False
+                try:
+                    os.remove(self.path)
+                except Exception:
+                    return False
+
+    def release(self):
+        if self.fd is not None:
+            try:
+                os.close(self.fd)
+            except Exception:
+                pass
+            self.fd = None
+        try:
+            os.remove(self.path)
+        except Exception:
+            pass
+
+    def _read_pid(self) -> int | None:
+        try:
+            with open(self.path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if not content:
+                    return None
+                return int(content)
+        except Exception:
+            return None
