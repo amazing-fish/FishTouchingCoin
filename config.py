@@ -9,7 +9,7 @@ from datetime import datetime, time as dtime
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.3.2"
+    APP_VERSION = "v0.4.1"
     APP_VERSION_TYPE = "bugfix"
 
     # —— 会被首次配置覆盖的参数（默认值）——

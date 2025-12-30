@@ -264,7 +264,7 @@ class FishMoneyUI:
         header.pack(padx=12, pady=(12, 6))
 
         list_frame = tk.Frame(details)
-        list_frame.pack(padx=12, pady=(0, 12), fill="both", expand=True)
+        list_frame.pack(padx=12, pady=(0, 8), fill="both", expand=True)
 
         for day_str, value in days:
             if max_value > 0:
@@ -276,6 +276,54 @@ class FishMoneyUI:
             tk.Label(list_frame, text=row_text, anchor="w", font=(Config.FONT_FAMILY, Config.FONT_SIZE)).pack(
                 fill="x"
             )
+
+        divider = tk.Frame(details, height=1, bg="#DDDDDD")
+        divider.pack(fill="x", padx=12, pady=(0, 8))
+
+        usage_title = tk.Label(details, text="下班后最后使用时间", font=(Config.FONT_FAMILY, 10, "bold"))
+        usage_title.pack(padx=12, pady=(0, 6), anchor="w")
+
+        usage_frame = tk.Frame(details)
+        usage_frame.pack(padx=12, pady=(0, 12), fill="both", expand=True)
+
+        usage_map = dict(getattr(self, "last_after_work_usage", {}) or {})
+        latest_time = None
+        latest_day = None
+        usage_rows = []
+        for i in range(6, -1, -1):
+            day = now.date() - timedelta(days=i)
+            day_str = day.strftime("%Y-%m-%d")
+            time_str = usage_map.get(day_str)
+            usage_rows.append((day_str, time_str))
+            if time_str:
+                try:
+                    parsed = datetime.strptime(time_str, "%H:%M").time()
+                except Exception:
+                    continue
+                if latest_time is None or parsed > latest_time:
+                    latest_time = parsed
+                    latest_day = day_str
+
+        for day_str, time_str in usage_rows:
+            if time_str:
+                row_text = f"{day_str}  {time_str}"
+            else:
+                row_text = f"{day_str}  --:--"
+            tk.Label(usage_frame, text=row_text, anchor="w", font=(Config.FONT_FAMILY, Config.FONT_SIZE)).pack(
+                fill="x"
+            )
+
+        if latest_time is None:
+            highlight = "近7天暂无下班后使用记录"
+        else:
+            highlight = f"最晚：{latest_time.strftime('%H:%M')}（{latest_day}）"
+        tk.Label(
+            usage_frame,
+            text=highlight,
+            anchor="w",
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE),
+            fg="#1E90FF",
+        ).pack(fill="x", pady=(4, 0))
 
     # 拖动
     def start_move(self, event):
@@ -416,7 +464,13 @@ class FishMoneyUI:
         self.earned_money = 0.0
         self.lock_start_time_m = None
         try:
-            DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
+            DataManager.save(
+                self.current_date,
+                self.earned_money,
+                self.settled_date,
+                self.history,
+                self.last_after_work_usage,
+            )
         except Exception:
             pass
         self.lift_soft()
@@ -428,7 +482,13 @@ class FishMoneyUI:
 
     def on_exit(self, event=None):
         try:
-            DataManager.save(self.current_date, self.earned_money, self.settled_date, self.history)
+            DataManager.save(
+                self.current_date,
+                self.earned_money,
+                self.settled_date,
+                self.history,
+                self.last_after_work_usage,
+            )
         except Exception:
             pass
         self._stop_tray_icon()
