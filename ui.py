@@ -263,21 +263,28 @@ class FishMoneyUI:
         container = tk.Frame(details, bg=panel_bg)
         container.pack(padx=12, pady=12, fill="both", expand=True)
 
-        tk.Label(
-            container,
-            text="详情概览",
-            font=(Config.FONT_FAMILY, 11, "bold"),
-            bg=panel_bg,
-            fg="#111827",
-        ).pack(anchor="w", pady=(0, 8))
-
         days = []
         for i in range(6, -1, -1):
             day = now.date() - timedelta(days=i)
             day_str = day.strftime("%Y-%m-%d")
-            days.append((day_str, float(data_map.get(day_str, 0.0))))
+            day_label = day.strftime("%m-%d")
+            days.append((day_str, day_label, float(data_map.get(day_str, 0.0))))
 
-        max_value = max((value for _, value in days), default=0.0)
+        max_value = max((value for _, _, value in days), default=0.0)
+        usage_map = dict(getattr(self, "last_after_work_usage", {}) or {})
+        latest_time = None
+        latest_day = None
+        for day_str, _, _ in days:
+            time_str = usage_map.get(day_str)
+            if not time_str:
+                continue
+            try:
+                parsed = datetime.strptime(time_str, "%H:%M").time()
+            except Exception:
+                continue
+            if latest_time is None or parsed > latest_time:
+                latest_time = parsed
+                latest_day = day_str
 
         trend_card = tk.Frame(
             container,
@@ -300,14 +307,15 @@ class FishMoneyUI:
 
         bar_canvas_width = 120
         bar_canvas_height = 8
-        for day_str, value in days:
+        for day_str, day_label, value in days:
             row = tk.Frame(list_frame, bg=section_bg)
             row.pack(fill="x", pady=2)
+            time_str = usage_map.get(day_str)
 
             tk.Label(
                 row,
-                text=day_str,
-                width=11,
+                text=day_label,
+                width=6,
                 anchor="w",
                 font=(Config.FONT_FAMILY, Config.FONT_SIZE),
                 bg=section_bg,
@@ -318,7 +326,7 @@ class FishMoneyUI:
                 row,
                 text=f"￥{value:,.2f}",
                 width=10,
-                anchor="e",
+                anchor="w",
                 font=(Config.FONT_FAMILY, Config.FONT_SIZE),
                 bg=section_bg,
                 fg="#111827",
@@ -354,76 +362,17 @@ class FishMoneyUI:
                     outline=bar_color,
                 )
 
-        usage_card = tk.Frame(
-            container,
-            bg=section_bg,
-            highlightthickness=1,
-            highlightbackground=border_color,
-        )
-        usage_card.pack(fill="x")
-
-        tk.Label(
-            usage_card,
-            text="下班后最后使用时间",
-            font=(Config.FONT_FAMILY, 10, "bold"),
-            bg=section_bg,
-            fg="#111827",
-        ).pack(anchor="w", padx=10, pady=(8, 6))
-
-        usage_frame = tk.Frame(usage_card, bg=section_bg)
-        usage_frame.pack(padx=10, pady=(0, 8), fill="x")
-
-        usage_map = dict(getattr(self, "last_after_work_usage", {}) or {})
-        latest_time = None
-        latest_day = None
-        usage_rows = []
-        for i in range(6, -1, -1):
-            day = now.date() - timedelta(days=i)
-            day_str = day.strftime("%Y-%m-%d")
-            time_str = usage_map.get(day_str)
-            usage_rows.append((day_str, time_str))
             if time_str:
-                try:
-                    parsed = datetime.strptime(time_str, "%H:%M").time()
-                except Exception:
-                    continue
-                if latest_time is None or parsed > latest_time:
-                    latest_time = parsed
-                    latest_day = day_str
-
-        for day_str, time_str in usage_rows:
-            row = tk.Frame(usage_frame, bg=section_bg)
-            row.pack(fill="x", pady=2)
-            tk.Label(
-                row,
-                text=day_str,
-                width=11,
-                anchor="w",
-                font=(Config.FONT_FAMILY, Config.FONT_SIZE),
-                bg=section_bg,
-                fg=text_muted,
-            ).pack(side="left")
-            tk.Label(
-                row,
-                text=time_str or "--:--",
-                anchor="e",
-                font=(Config.FONT_FAMILY, Config.FONT_SIZE),
-                bg=section_bg,
-                fg="#111827",
-            ).pack(side="right")
-
-        if latest_time is None:
-            highlight = "近7天暂无下班后使用记录"
-        else:
-            highlight = f"最晚：{latest_time.strftime('%H:%M')}（{latest_day}）"
-        tk.Label(
-            usage_card,
-            text=highlight,
-            anchor="w",
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE),
-            bg=section_bg,
-            fg="#2563EB",
-        ).pack(fill="x", padx=10, pady=(0, 10))
+                time_color = "#2563EB" if day_str == latest_day else text_muted
+                tk.Label(
+                    row,
+                    text=f"下班 {time_str}",
+                    width=9,
+                    anchor="e",
+                    font=(Config.FONT_FAMILY, Config.FONT_SIZE),
+                    bg=section_bg,
+                    fg=time_color,
+                ).pack(side="right", padx=(8, 0))
 
     # 拖动
     def start_move(self, event):
