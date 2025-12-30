@@ -9,7 +9,7 @@ from datetime import datetime, time as dtime
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.4.5"
+    APP_VERSION = "v0.4.6"
     APP_VERSION_TYPE = "refactor"
 
     # —— 会被首次配置覆盖的参数（默认值）——
@@ -41,6 +41,12 @@ class Config:
     WINDOW_WIDTH = 130
     WINDOW_HEIGHT = 25
     REFRESH_RATE = 100  # ms
+
+    MENU_BG = "#FFFFFF"
+    MENU_FG = "#111827"
+    MENU_ACTIVE_BG = "#E5F0FF"
+    MENU_ACTIVE_FG = "#1D4ED8"
+    MENU_BORDER = "#D1D5DB"
 
     BOSS_KEY = 0x78  # F9
 
