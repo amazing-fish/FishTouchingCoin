@@ -258,33 +258,55 @@ class FishMoneyUI:
             days.append((day_str, float(data_map.get(day_str, 0.0))))
 
         max_value = max((value for _, value in days), default=0.0)
-        bar_width = 20
+        bar_width = 12
 
-        header = tk.Label(details, text="近7天摸鱼趋势", font=(Config.FONT_FAMILY, 10, "bold"))
-        header.pack(padx=12, pady=(12, 6))
+        content = tk.Frame(details)
+        content.pack(padx=12, pady=12, fill="both", expand=True)
 
-        list_frame = tk.Frame(details)
-        list_frame.pack(padx=12, pady=(0, 8), fill="both", expand=True)
+        header = tk.Label(content, text="近7天摸鱼趋势", font=(Config.FONT_FAMILY, 10, "bold"))
+        header.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
 
-        for day_str, value in days:
+        list_frame = tk.Frame(content)
+        list_frame.grid(row=1, column=0, columnspan=3, sticky="ew")
+        list_frame.columnconfigure(2, weight=1)
+
+        header_style = dict(font=(Config.FONT_FAMILY, 9), fg="#666666")
+        tk.Label(list_frame, text="日期", **header_style).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        tk.Label(list_frame, text="金额", **header_style).grid(row=0, column=1, sticky="e", padx=(0, 8))
+        tk.Label(list_frame, text="趋势", **header_style).grid(row=0, column=2, sticky="w")
+
+        for idx, (day_str, value) in enumerate(days, start=1):
             if max_value > 0:
                 bar_count = int(round((value / max_value) * bar_width))
             else:
                 bar_count = 0
-            bar_text = "█" * bar_count
-            row_text = f"{day_str}  ￥{value:,.2f}  {bar_text}"
-            tk.Label(list_frame, text=row_text, anchor="w", font=(Config.FONT_FAMILY, Config.FONT_SIZE)).pack(
-                fill="x"
-            )
+            bar_text = "▇" * bar_count
+            short_date = day_str[5:]
+            tk.Label(
+                list_frame,
+                text=short_date,
+                anchor="w",
+                font=(Config.FONT_FAMILY, Config.FONT_SIZE),
+            ).grid(row=idx, column=0, sticky="w", padx=(0, 8))
+            tk.Label(
+                list_frame,
+                text=f"￥{value:,.2f}",
+                anchor="e",
+                font=(Config.FONT_FAMILY, Config.FONT_SIZE),
+            ).grid(row=idx, column=1, sticky="e", padx=(0, 8))
+            tk.Label(
+                list_frame,
+                text=bar_text,
+                anchor="w",
+                font=(Config.FONT_FAMILY, Config.FONT_SIZE),
+                fg="#1E90FF",
+            ).grid(row=idx, column=2, sticky="w")
 
-        divider = tk.Frame(details, height=1, bg="#DDDDDD")
-        divider.pack(fill="x", padx=12, pady=(0, 8))
+        usage_title = tk.Label(content, text="下班后最晚使用", font=(Config.FONT_FAMILY, 10, "bold"))
+        usage_title.grid(row=2, column=0, columnspan=3, sticky="w", pady=(10, 6))
 
-        usage_title = tk.Label(details, text="下班后最后使用时间", font=(Config.FONT_FAMILY, 10, "bold"))
-        usage_title.pack(padx=12, pady=(0, 6), anchor="w")
-
-        usage_frame = tk.Frame(details)
-        usage_frame.pack(padx=12, pady=(0, 12), fill="both", expand=True)
+        usage_frame = tk.Frame(content)
+        usage_frame.grid(row=3, column=0, columnspan=3, sticky="ew")
 
         usage_map = dict(getattr(self, "last_after_work_usage", {}) or {})
         latest_time = None
@@ -304,26 +326,36 @@ class FishMoneyUI:
                     latest_time = parsed
                     latest_day = day_str
 
-        for day_str, time_str in usage_rows:
-            if time_str:
-                row_text = f"{day_str}  {time_str}"
-            else:
-                row_text = f"{day_str}  --:--"
-            tk.Label(usage_frame, text=row_text, anchor="w", font=(Config.FONT_FAMILY, Config.FONT_SIZE)).pack(
-                fill="x"
-            )
-
         if latest_time is None:
             highlight = "近7天暂无下班后使用记录"
         else:
-            highlight = f"最晚：{latest_time.strftime('%H:%M')}（{latest_day}）"
+            highlight = f"最晚：{latest_time.strftime('%H:%M')}（{latest_day[5:]}）"
         tk.Label(
             usage_frame,
             text=highlight,
             anchor="w",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE),
             fg="#1E90FF",
-        ).pack(fill="x", pady=(4, 0))
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
+
+        for idx, (day_str, time_str) in enumerate(usage_rows, start=1):
+            short_date = day_str[5:]
+            time_text = time_str or "--:--"
+            time_color = "#333333" if time_str else "#999999"
+            tk.Label(
+                usage_frame,
+                text=short_date,
+                anchor="w",
+                font=(Config.FONT_FAMILY, Config.FONT_SIZE),
+                fg="#666666",
+            ).grid(row=idx, column=0, sticky="w", padx=(0, 8))
+            tk.Label(
+                usage_frame,
+                text=time_text,
+                anchor="w",
+                font=(Config.FONT_FAMILY, Config.FONT_SIZE),
+                fg=time_color,
+            ).grid(row=idx, column=1, sticky="w")
 
     # 拖动
     def start_move(self, event):
