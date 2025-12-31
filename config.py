@@ -9,8 +9,8 @@ from datetime import datetime, time as dtime
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.4.9"
-    APP_VERSION_TYPE = "bugfix"
+    APP_VERSION = "v0.4.10"
+    APP_VERSION_TYPE = "feature"
 
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0
