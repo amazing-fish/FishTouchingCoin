@@ -301,13 +301,14 @@ class FishMoneyUI:
             day = now.date() - timedelta(days=i)
             day_str = day.strftime("%Y-%m-%d")
             day_label = day.strftime("%m-%d")
-            days.append((day_str, day_label, float(data_map.get(day_str, 0.0))))
+            is_weekend = day.weekday() >= 5
+            days.append((day_str, day_label, float(data_map.get(day_str, 0.0)), is_weekend))
 
-        max_value = max((value for _, _, value in days), default=0.0)
+        max_value = max((value for _, _, value, _ in days), default=0.0)
         usage_map = dict(getattr(self, "last_after_work_usage", {}) or {})
         latest_time = None
         latest_day = None
-        for day_str, _, _ in days:
+        for day_str, _, _, _ in days:
             time_str = usage_map.get(day_str)
             if not time_str:
                 continue
@@ -340,7 +341,8 @@ class FishMoneyUI:
 
         bar_canvas_width = 120
         bar_canvas_height = 8
-        for day_str, day_label, value in days:
+        weekend_color = "#F97316"
+        for day_str, day_label, value, is_weekend in days:
             row = tk.Frame(list_frame, bg=section_bg)
             row.pack(fill="x", pady=2)
             time_str = usage_map.get(day_str)
@@ -352,7 +354,7 @@ class FishMoneyUI:
                 anchor="w",
                 font=(Config.FONT_FAMILY, Config.FONT_SIZE),
                 bg=section_bg,
-                fg=text_muted,
+                fg=weekend_color if is_weekend else text_muted,
             ).pack(side="left")
 
             tk.Label(
