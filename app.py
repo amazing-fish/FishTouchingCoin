@@ -38,6 +38,7 @@ class FishMoneyApp(FishMoneyUI):
 
         self._original_exstyle = None
         self.is_modal_open = False
+        self.is_context_menu_open = False
         self.settings_dialog = None
         self._settings_opening = False
 
