@@ -468,9 +468,9 @@ class FishMoneyUI:
     def _menu_action(self, action):
         def handler():
             try:
-                action()
+                self._close_menu()
             finally:
-                self.root.after_idle(self._close_menu)
+                self.root.after(0, action)
 
         return handler
 
