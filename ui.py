@@ -467,10 +467,8 @@ class FishMoneyUI:
 
     def _menu_action(self, action):
         def handler():
-            try:
-                action()
-            finally:
-                self.root.after_idle(self._close_menu)
+            self._close_menu_sync()
+            self.root.after_idle(action)
 
         return handler
 
@@ -486,13 +484,21 @@ class FishMoneyUI:
         except Exception:
             pass
 
-    def _close_menu(self):
+    def _close_menu_sync(self):
         try:
             self.menu.unpost()
         except Exception:
             pass
+        try:
+            grab_widget = self.root.grab_current()
+        except Exception:
+            grab_widget = None
+        if grab_widget is not None:
+            try:
+                grab_widget.grab_release()
+            except Exception:
+                pass
         self.is_context_menu_open = False
-        self._release_grab()
         try:
             self.root.focus_force()
         except Exception:
