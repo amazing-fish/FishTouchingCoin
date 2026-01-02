@@ -462,15 +462,11 @@ class FishMoneyUI:
         except Exception:
             self.is_context_menu_open = False
             raise
-        finally:
-            self._release_grab()
 
     def _menu_action(self, action):
         def handler():
-            try:
-                action()
-            finally:
-                self.root.after_idle(self._close_menu)
+            self._close_menu()
+            self.root.after_idle(action)
 
         return handler
 
@@ -501,6 +497,7 @@ class FishMoneyUI:
     def _on_menu_unmap(self, event):
         if event.widget is self.menu:
             self.is_context_menu_open = False
+            self._release_grab()
 
     def _on_menu_destroy(self, event):
         if event.widget is self.menu:
