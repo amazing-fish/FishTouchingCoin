@@ -105,6 +105,8 @@ class FishMoneyUI:
             bd=1,
             activeborderwidth=0,
         )
+        self.menu.bind("<Unmap>", self._on_menu_unmap)
+        self.menu.bind("<Destroy>", self._on_menu_destroy)
         menu_font = (Config.FONT_FAMILY, Config.FONT_SIZE)
         self.menu.add_command(
             label="暂停计费",
@@ -166,7 +168,12 @@ class FishMoneyUI:
 
     # 置顶（柔）：稍后反击，避免和某些窗口疯狂顶牛
     def lift_soft(self):
-        if not self.is_visible or self.is_dragging or self.is_modal_open:
+        if (
+            not self.is_visible
+            or self.is_dragging
+            or self.is_modal_open
+            or self.is_context_menu_open
+        ):
             return
         try:
             self.root.after(80, self.lift_once)
@@ -443,6 +450,7 @@ class FishMoneyUI:
 
     # —— 5) 右键菜单动作 ——
     def show_menu(self, event):
+        self.is_context_menu_open = True
         try:
             label = "继续计费" if self.is_paused else "暂停计费"
             try:
@@ -451,6 +459,9 @@ class FishMoneyUI:
                 pass
             self.menu.tk_popup(event.x_root, event.y_root)
             self.root.after_idle(self._focus_menu)
+        except Exception:
+            self.is_context_menu_open = False
+            raise
         finally:
             self._release_grab()
 
@@ -480,11 +491,20 @@ class FishMoneyUI:
             self.menu.unpost()
         except Exception:
             pass
+        self.is_context_menu_open = False
         self._release_grab()
         try:
             self.root.focus_force()
         except Exception:
             pass
+
+    def _on_menu_unmap(self, event):
+        if event.widget is self.menu:
+            self.is_context_menu_open = False
+
+    def _on_menu_destroy(self, event):
+        if event.widget is self.menu:
+            self.is_context_menu_open = False
 
     def _release_grab(self):
         try:
