@@ -1,4 +1,5 @@
 import ctypes
+import logging
 import os
 import threading
 from datetime import datetime, timedelta
@@ -11,8 +12,19 @@ from PIL import Image
 from config import Config, SettingsDialog, SettingsManager
 from storage import DataManager
 
+_logger = logging.getLogger(__name__)
+
 
 class FishMoneyUI:
+    def _notify_failure(self, title: str, message: str, error: Exception | None = None):
+        detail = message
+        if Config.DEBUG and error is not None:
+            detail = f"{message}\n{error}"
+        try:
+            messagebox.showwarning(title, detail, parent=self.root)
+        except Exception:
+            _logger.exception("提示失败", extra={"title": title, "message": message})
+
     def setup_window(self):
         self.root.overrideredirect(True)
         self.root.configure(bg=Config.BG_KEY_COLOR)
@@ -56,7 +68,7 @@ class FishMoneyUI:
                     swp_nomove | swp_nosize | swp_nozorder | swp_framechanged,
                 )
         except Exception:
-            pass
+            _logger.exception("更新窗口样式失败")
 
     def create_widgets(self):
         self.canvas = tk.Canvas(
@@ -164,7 +176,7 @@ class FishMoneyUI:
             self.root.attributes("-topmost", True)
             self.root.lift()
         except Exception:
-            pass
+            _logger.exception("窗口置顶失败")
 
     # 置顶（柔）：稍后反击，避免和某些窗口疯狂顶牛
     def lift_soft(self):
@@ -178,7 +190,7 @@ class FishMoneyUI:
         try:
             self.root.after(80, self.lift_once)
         except Exception:
-            pass
+            _logger.exception("窗口置顶兜底失败")
 
     def on_minimize(self, event):
         # 最小化时收到托盘
@@ -186,7 +198,7 @@ class FishMoneyUI:
             try:
                 self.root.after_idle(self.root.withdraw)
             except Exception:
-                pass
+                _logger.exception("最小化隐藏失败")
             self.hide_to_tray()
 
     def hide_to_tray(self):
@@ -225,14 +237,18 @@ class FishMoneyUI:
             self.root.after(0, self.on_exit)
 
         def runner():
-            image = self._load_tray_image()
-            menu = pystray.Menu(
-                pystray.MenuItem("显示窗口", on_show),
-                pystray.MenuItem("详情", on_details),
-                pystray.MenuItem("退出", on_exit),
-            )
-            self.tray_icon = pystray.Icon("FishTouchingCoin", image, "摸鱼币", menu)
-            self.tray_icon.run()
+            try:
+                image = self._load_tray_image()
+                menu = pystray.Menu(
+                    pystray.MenuItem("显示窗口", on_show),
+                    pystray.MenuItem("详情", on_details),
+                    pystray.MenuItem("退出", on_exit),
+                )
+                self.tray_icon = pystray.Icon("FishTouchingCoin", image, "摸鱼币", menu)
+                self.tray_icon.run()
+            except Exception as exc:
+                _logger.exception("托盘启动失败")
+                self.root.after(0, self._notify_failure, "托盘失败", "托盘启动失败，已记录日志。", exc)
 
         self.tray_thread = threading.Thread(target=runner, daemon=True)
         self.tray_thread.start()
@@ -242,7 +258,7 @@ class FishMoneyUI:
             try:
                 self.tray_icon.stop()
             except Exception:
-                pass
+                _logger.exception("托盘停止失败")
             self.tray_icon = None
             self.tray_thread = None
 
@@ -251,6 +267,7 @@ class FishMoneyUI:
         try:
             return Image.open(icon_path)
         except Exception:
+            _logger.exception("加载托盘图标失败", extra={"icon_path": icon_path})
             return Image.new("RGB", (64, 64), Config.BG_KEY_COLOR)
 
     def open_details(self):
@@ -584,10 +601,12 @@ class FishMoneyUI:
                     self.lock_start_time_m = None
                     self.lift_soft()
                 except Exception as e:
-                    messagebox.showerror("保存失败", str(e), parent=self.root)
+                    _logger.exception("保存配置失败")
+                    self._notify_failure("保存失败", "配置保存失败，已记录日志。", e)
 
             dlg.bind("<Destroy>", finalize_dialog)
         except Exception:
+            _logger.exception("打开配置窗口失败")
             self.is_modal_open = False
             self._settings_opening = False
             self.settings_dialog = None
@@ -614,7 +633,8 @@ class FishMoneyUI:
                 self.last_after_work_usage,
             )
         except Exception:
-            pass
+            _logger.exception("重置后保存失败")
+            self._notify_failure("保存失败", "保存失败，已记录日志。")
         self.lift_soft()
 
     def confirm_exit(self):
@@ -632,7 +652,8 @@ class FishMoneyUI:
                 self.last_after_work_usage,
             )
         except Exception:
-            pass
+            _logger.exception("退出前保存失败")
+            self._notify_failure("保存失败", "退出前保存失败，已记录日志。")
         self._stop_tray_icon()
         try:
             self.root.destroy()

@@ -9,8 +9,9 @@ from datetime import datetime, time as dtime
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.4.11"
+    APP_VERSION = "v0.4.12"
     APP_VERSION_TYPE = "bugfix"
+    DEBUG = os.getenv("FISH_DEBUG", "").lower() in {"1", "true", "yes", "on"}
 
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0

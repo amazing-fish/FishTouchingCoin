@@ -2,9 +2,43 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
+from logging.handlers import RotatingFileHandler
 
 from config import Config
 from system_utils import SystemUtils
+
+_LOG_FILE_NAME = "app.log"
+_LOG_INITIALIZED = False
+
+
+def configure_logging() -> str | None:
+    global _LOG_INITIALIZED
+    if _LOG_INITIALIZED:
+        return os.path.join(StoragePaths.data_dir(), _LOG_FILE_NAME)
+    try:
+        log_dir = StoragePaths.ensure_dir()
+        log_path = os.path.join(log_dir, _LOG_FILE_NAME)
+        root_logger = logging.getLogger()
+        for handler in root_logger.handlers:
+            if isinstance(handler, RotatingFileHandler) and getattr(handler, "baseFilename", None) == log_path:
+                _LOG_INITIALIZED = True
+                return log_path
+        handler = RotatingFileHandler(
+            log_path,
+            maxBytes=512 * 1024,
+            backupCount=3,
+            encoding="utf-8",
+            delay=True,
+        )
+        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
+        if root_logger.level == logging.WARNING:
+            root_logger.setLevel(logging.INFO)
+        _LOG_INITIALIZED = True
+        return log_path
+    except Exception:
+        return None
 
 
 # ==========================================
@@ -67,7 +101,10 @@ class StoragePaths:
                 os.replace(legacy_path, target_path)
                 return
             except Exception:
-                pass
+                logging.getLogger(__name__).exception(
+                    "迁移旧数据失败",
+                    extra={"legacy_path": legacy_path, "target_path": target_path},
+                )
 
 
 # ==========================================
@@ -106,6 +143,7 @@ class DataManager:
 
     @staticmethod
     def load():
+        configure_logging()
         today = DataManager._today_str()
         data_file = StoragePaths.data_file()
         StoragePaths.migrate_legacy_files(StoragePaths.legacy_data_files(), data_file)
@@ -126,11 +164,12 @@ class DataManager:
             return file_date, money, settled_date, history, last_after_work_usage
 
         except Exception:
+            DataManager._logger.exception("读取数据失败", extra={"data_file": data_file})
             try:
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                 os.replace(data_file, f"{data_file}.corrupt.{ts}")
             except Exception:
-                pass
+                DataManager._logger.exception("备份损坏数据失败", extra={"data_file": data_file})
             return today, 0.0, "", {}, {}
 
     @staticmethod
@@ -141,6 +180,7 @@ class DataManager:
         history: dict[str, float],
         last_after_work_usage: dict[str, str],
     ):
+        configure_logging()
         try:
             pruned_history = DataManager._prune_history(history)
             pruned_last_usage = DataManager._prune_date_map(last_after_work_usage)
