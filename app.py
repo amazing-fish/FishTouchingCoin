@@ -1,4 +1,5 @@
 import atexit
+import logging
 import time
 from datetime import datetime
 
@@ -6,9 +7,11 @@ import tkinter as tk
 from tkinter import messagebox
 
 from config import Config, SettingsDialog, SettingsManager
-from storage import DataManager, InstanceLock, StoragePaths
+from storage import DataManager, InstanceLock, StoragePaths, configure_logging
 from system_utils import SystemUtils
 from ui import FishMoneyUI
+
+_logger = logging.getLogger(__name__)
 
 
 # ==========================================
@@ -98,7 +101,7 @@ class FishMoneyApp(FishMoneyUI):
                 try:
                     self.history = DataManager.append_history(self.history, self.current_date, self.earned_money)
                 except Exception:
-                    pass
+                    _logger.exception("写入跨天历史失败", extra={"date": self.current_date})
                 self.settled_date = self.current_date
                 self.mark_dirty(request_save=True)
 
@@ -119,7 +122,7 @@ class FishMoneyApp(FishMoneyUI):
             try:
                 self.history = DataManager.append_history(self.history, today, self.earned_money)
             except Exception:
-                pass
+                _logger.exception("写入日结历史失败", extra={"date": today})
             self.settled_date = today
             self.mark_dirty(request_save=True)
 
@@ -141,6 +144,7 @@ class FishMoneyApp(FishMoneyUI):
                     self.last_after_work_usage,
                 )
             except Exception:
+                _logger.exception("定时保存失败")
                 return
             self.is_dirty = False
             self.save_requested = False
@@ -336,11 +340,12 @@ def ensure_single_instance() -> InstanceLock | None:
         messagebox.showinfo("已在运行", "程序已在运行，请先关闭现有实例。")
         root.destroy()
     except Exception:
-        pass
+        _logger.exception("单实例提示失败")
     return None
 
 
 def main():
+    configure_logging()
     instance_lock = ensure_single_instance()
     if instance_lock is None:
         return
