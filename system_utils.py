@@ -1,4 +1,5 @@
 import os
+import sys
 import ctypes
 from ctypes import wintypes
 
@@ -80,3 +81,54 @@ class SystemUtils:
             return exit_code.value == STILL_ACTIVE
         finally:
             SystemUtils.kernel32.CloseHandle(handle)
+
+    @staticmethod
+    def _auto_start_command() -> str:
+        if getattr(sys, "frozen", False):
+            return f'"{sys.executable}"'
+        app_entry = os.path.abspath(os.path.join(os.path.dirname(__file__), "app.py"))
+        return f'"{sys.executable}" "{app_entry}"'
+
+    @staticmethod
+    def is_auto_start_enabled() -> bool:
+        if os.name != "nt":
+            return False
+        try:
+            import winreg
+            from config import Config
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0,
+                winreg.KEY_READ,
+            ) as key:
+                value, _ = winreg.QueryValueEx(key, Config.APP_NAME)
+                return str(value).strip() == SystemUtils._auto_start_command()
+        except Exception:
+            return False
+
+    @staticmethod
+    def set_auto_start(enabled: bool) -> bool:
+        if os.name != "nt":
+            return False
+        try:
+            import winreg
+            from config import Config
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0,
+                winreg.KEY_SET_VALUE,
+            ) as key:
+                if enabled:
+                    winreg.SetValueEx(key, Config.APP_NAME, 0, winreg.REG_SZ, SystemUtils._auto_start_command())
+                else:
+                    try:
+                        winreg.DeleteValue(key, Config.APP_NAME)
+                    except FileNotFoundError:
+                        pass
+            return True
+        except Exception:
+            return False

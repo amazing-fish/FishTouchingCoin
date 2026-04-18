@@ -114,6 +114,18 @@ class FishMoneyUI:
             font=menu_font,
         )
         self.menu_pause_index = 0
+        self.auto_start_var = tk.BooleanVar(
+            value=bool(getattr(self, "is_auto_start_enabled", False))
+        )
+        self.menu.add_checkbutton(
+            label="开机自启",
+            command=self._menu_action(self.toggle_auto_start),
+            variable=self.auto_start_var,
+            onvalue=True,
+            offvalue=False,
+            font=menu_font,
+        )
+        self.menu_autostart_index = 1
         self.menu.add_command(
             label="详情",
             command=self._menu_action(self.open_details),
@@ -455,6 +467,10 @@ class FishMoneyUI:
             label = "继续计费" if self.is_paused else "暂停计费"
             try:
                 self.menu.entryconfigure(self.menu_pause_index, label=label)
+            except Exception:
+                pass
+            try:
+                self.auto_start_var.set(bool(getattr(self, "is_auto_start_enabled", False)))
             except Exception:
                 pass
             self.menu.tk_popup(event.x_root, event.y_root)

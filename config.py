@@ -9,8 +9,9 @@ from datetime import datetime, time as dtime
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.4.11"
-    APP_VERSION_TYPE = "bugfix"
+    APP_VERSION = "v0.5.1"
+    APP_VERSION_TYPE = "refactor"
+    APP_NAME = "FishTouchingCoin"
 
     # —— 会被首次配置覆盖的参数（默认值）——
     MONTHLY_SALARY = 20000.0

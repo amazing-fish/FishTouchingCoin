@@ -35,6 +35,7 @@ class FishMoneyApp(FishMoneyUI):
         self.tray_thread = None
 
         self.is_paused = False  # —— 右键菜单新增：暂停计费 ——
+        self.is_auto_start_enabled = SystemUtils.is_auto_start_enabled()
 
         self._original_exstyle = None
         self.is_modal_open = False
@@ -72,6 +73,16 @@ class FishMoneyApp(FishMoneyUI):
         self.bind_events()
 
         self.update_loop()
+
+    def toggle_auto_start(self):
+        target = not self.is_auto_start_enabled
+        if SystemUtils.set_auto_start(target):
+            self.is_auto_start_enabled = target
+            return
+        try:
+            messagebox.showwarning("开机自启", "设置失败：仅支持 Windows，且需要具备注册表写入权限。")
+        except Exception:
+            pass
 
     def calculate_base_rate(self) -> float:
         daily = Config.MONTHLY_SALARY / Config.WORK_DAYS_PER_MONTH
