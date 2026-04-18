@@ -74,10 +74,29 @@ class FishMoneyApp(FishMoneyUI):
 
         self.update_loop()
 
+    def apply_auto_start_from_settings(self, settings: dict, sync_system: bool = True):
+        target = bool(settings.get("AUTO_START_ENABLED", False))
+        if sync_system:
+            if SystemUtils.set_auto_start(target):
+                self.is_auto_start_enabled = target
+            else:
+                self.is_auto_start_enabled = SystemUtils.is_auto_start_enabled()
+        else:
+            self.is_auto_start_enabled = target
+
+    def persist_auto_start_setting(self):
+        settings = SettingsManager.load_or_none() or SettingsManager.defaults()
+        settings["AUTO_START_ENABLED"] = bool(self.is_auto_start_enabled)
+        SettingsManager.save(settings)
+
     def toggle_auto_start(self):
         target = not self.is_auto_start_enabled
         if SystemUtils.set_auto_start(target):
             self.is_auto_start_enabled = target
+            try:
+                self.persist_auto_start_setting()
+            except Exception:
+                pass
             return
         try:
             messagebox.showwarning("开机自启", "设置失败：仅支持 Windows，且需要具备注册表写入权限。")
@@ -365,11 +384,15 @@ def main():
         root.wait_window(dlg)
         settings = dlg.result or SettingsManager.defaults()
         SettingsManager.save(settings)
+    elif "AUTO_START_ENABLED" not in settings:
+        settings["AUTO_START_ENABLED"] = SystemUtils.is_auto_start_enabled()
+        SettingsManager.save(settings)
 
     SettingsManager.apply_to_config(settings)
 
     root.deiconify()
     app = FishMoneyApp(root)
+    app.apply_auto_start_from_settings(settings, sync_system=False)
     root.mainloop()
 
 
