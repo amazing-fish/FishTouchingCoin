@@ -9,8 +9,8 @@ from datetime import datetime, time as dtime
 # 配置区域 (Configuration)
 # ==========================================
 class Config:
-    APP_VERSION = "v0.5.1"
-    APP_VERSION_TYPE = "refactor"
+    APP_VERSION = "v0.6.0"
+    APP_VERSION_TYPE = "feature"
     APP_NAME = "FishTouchingCoin"
 
     # —— 会被首次配置覆盖的参数（默认值）——
@@ -84,6 +84,7 @@ class SettingsManager:
             "LUNCH_END": Config.LUNCH_END.strftime("%H:%M"),
             "WORK_END": Config.WORK_END.strftime("%H:%M"),
             "WEEKEND_MULTIPLIER": Config.WEEKEND_MULTIPLIER,
+            "AUTO_START_ENABLED": False,
         }
 
     @staticmethod
@@ -163,6 +164,7 @@ class SettingsDialog(tk.Toplevel):
             "LUNCH_END": tk.StringVar(value=str(initial["LUNCH_END"])),
             "WORK_END": tk.StringVar(value=str(initial["WORK_END"])),
             "WEEKEND_MULTIPLIER": tk.StringVar(value=str(initial["WEEKEND_MULTIPLIER"])),
+            "AUTO_START_ENABLED": tk.BooleanVar(value=bool(initial.get("AUTO_START_ENABLED", False))),
         }
 
         self._build_ui()
@@ -200,6 +202,12 @@ class SettingsDialog(tk.Toplevel):
         row(6, "午休结束(HH:MM)", "LUNCH_END", "例如 14:00")
         row(7, "下班时间(HH:MM)", "WORK_END", "例如 18:00")
         row(8, "周末倍率", "WEEKEND_MULTIPLIER", "例如 2")
+        tk.Checkbutton(
+            frm,
+            text="开机自启（仅 Windows）",
+            variable=self.vars["AUTO_START_ENABLED"],
+            anchor="w",
+        ).grid(row=9, column=0, columnspan=3, sticky="w", pady=(6, 4))
 
         btns = tk.Frame(self)
         btns.pack(padx=pad, pady=(0, pad), fill="x")
@@ -223,7 +231,12 @@ class SettingsDialog(tk.Toplevel):
 
     def _on_ok(self):
         try:
-            s = {k: v.get().strip() for k, v in self.vars.items()}
+            s = {}
+            for key, var in self.vars.items():
+                val = var.get()
+                if isinstance(val, str):
+                    val = val.strip()
+                s[key] = val
 
             # 数值校验
             s["MONTHLY_SALARY"] = float(s["MONTHLY_SALARY"])
@@ -232,6 +245,7 @@ class SettingsDialog(tk.Toplevel):
             s["IDLE_THRESHOLD"] = float(s["IDLE_THRESHOLD"])
             s["LOCK_GRACE_PERIOD_MIN"] = float(s["LOCK_GRACE_PERIOD_MIN"])
             s["WEEKEND_MULTIPLIER"] = float(s["WEEKEND_MULTIPLIER"])
+            s["AUTO_START_ENABLED"] = bool(s["AUTO_START_ENABLED"])
 
             if s["MONTHLY_SALARY"] <= 0:
                 raise ValueError("月薪必须 > 0")
