@@ -595,7 +595,6 @@ class FishMoneyUI:
                 try:
                     SettingsManager.save(dlg.result)
                     SettingsManager.apply_to_config(dlg.result)
-                    self.apply_auto_start_from_settings(dlg.result)
                     self.base_salary_per_second = self.calculate_base_rate()
                     # 配置变了，避免锁屏计时残留
                     self.lock_start_time_m = None
