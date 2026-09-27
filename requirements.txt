@@ -1,3 +1,2 @@
-pystray
-Pillow
-pywin32
+pystray==0.19.5
+Pillow==12.3.0

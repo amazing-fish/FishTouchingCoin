@@ -1,40 +1,34 @@
 # Anchor 文档
 
 ## 版本规范
-- 版本号采用 `v主.次.修`，并在修改日志中标注 `feature/refactor/bugfix` 类型。
+- 版本号采用 `v主.次.修`，并在修改日志中标注 `feature/refactor/bugfix` 类型；版本常量在 `fishcoin/__init__.py`。
+
+## 第一性原理
+- 今日收入 = ∫ 费率(t) × 是否摸鱼(t) dt。计费规则是纯逻辑（`fishcoin/domain`），展示与系统集成围绕它组装。
+- 这是摸鱼工具：默认形态必须低调，信息只在用户主动交互（悬停、打开窗口）时展开。
 
 ## 技术路径
-- 窗口最小化通过 Tk `Unmap` 监听 `iconic` 状态后隐藏，托盘恢复时重置扩展样式以兼容 Alt-Tab。
-- 托盘能力基于 `pystray`/`Pillow`，优先使用仓库 `app.ico`，缺失时生成占位图避免崩溃。
-- 日结与计费在 `maybe_rollover_day` 中以 `WORK_END` 为阈值，确保不重复结算并写入历史记录。
-- 9:00 前不计入摸鱼收入，跨天锁屏保留起点以避免次日重复计费。
-- 配置与数据文件迁移至用户数据目录（`APPDATA`/`~/.local/share`），启动时自动迁移旧路径数据。
-- 系统能力仅在 Windows 启用，非 Windows 返回安全默认值并做工作时段边界校验。
-- 下班后最后使用时间在主循环按空闲阈值记录到 `last_after_work_usage` 字段。
-- 开机自启通过 Windows `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` 写入，右键菜单用勾选项实时反映状态。
-- 开机自启状态纳入“配置”弹窗持久化字段，启动与重新配置时按配置值同步系统注册表。
-- 启动时若检测到旧版 settings 缺少开机自启字段，则以系统当前状态回填并持久化，避免无感覆盖用户既有注册表配置。
+- 分层：`domain`（无 tkinter/ctypes，时间注入，pytest 覆盖）→ `infra`（存储、Windows API）→ `ui` → `app.py` 组装。
+- 计费：`Meter.tick(Sample)` 每 100ms 一次；单 tick 最多计 1 秒，防休眠/断点跳变；计费与窗口是否可见无关。
+- 锁屏：`WTSQuerySessionInformation(WTSSessionInfoEx).SessionFlags` 判定，0.5s 缓存；查询失败按“未知”回退为空闲计费。锁屏计时跟随真实锁屏会话，跨午休/跨天不重置。
+- 账本：`ledger.json` 按日期一条记录（money、last_after_work），今天的收入即当天记录，无“日结”快照。
+- 配置：`Settings` 不可变 dataclass，缺字段取默认，校验失败视为首次启动并备份损坏文件。上班时间固定 09:00（内部字段，UI 不暴露）。
+- 开机自启：注册表 `HKCU\...\Run` 是唯一事实来源，不在 settings 中冗余保存。
+- 单实例：命名互斥锁 `Local\FishTouchingCoin.SingleInstance`，进程退出由系统回收。
+- 悬浮窗：overrideredirect + DWM 圆角（Win11），平时暗灰数字、0.62 透明度，悬停展开；按“全 0”模板测宽避免抖动；右下角锚定。
+- 右键菜单：自绘 Toplevel，失焦即关，替代 `tk.Menu` 以规避其 grab/焦点问题。
+- 托盘：pystray 常驻独立线程，菜单事件经 `queue` 交回 Tk 主线程；提示文案保持中性。
+- 主循环 try/finally 保证持续调度；Tk 回调异常与运行日志写入 `app.log`。
+- 打包：PyInstaller `--add-data app.ico;.`，资源经 `sys._MEIPASS` 解析。
 
 ## 修改日志
 - v0.1.x feature/refactor/bugfix: 托盘化与依赖补齐、18:00 日结与历史记录、历史记录合并进数据文件。
 - v0.2.x feature/bugfix/refactor: 数据迁移到本地用户目录；托盘详情与趋势弹窗；计费/锁屏与窗口焦点修复；版本常量与历史写盘策略整理。
-- v0.3.x refactor/bugfix: 拆分配置、存储、系统调用与 UI 逻辑模块；优化 README/Anchor 文档结构；增强非 Windows 降级与配置时间边界校验。
-- v0.4.0 feature: 记录每日下班后最后使用时间，详情展示近7天最晚使用时刻并优化信息层级。
-- v0.4.1 bugfix: 增加单实例锁，避免重复启动多个进程。
-- v0.4.2 refactor: 精简详情弹窗层级与排版，降低信息密度并统一视觉样式。
-- v0.4.3 refactor: 详情弹窗移除概览标题，趋势日期去年份并合并展示实际下班时间。
-- v0.4.4 refactor: 仅在有记录时显示下班时间，并突出最晚记录日期。
-- v0.4.5 refactor: 简化修改日志并重构技术路径描述。
-- v0.4.6 refactor: 优化右键菜单栏视觉样式与状态提示。
-- v0.4.7 bugfix: 修正右键菜单项不兼容的 padding 参数导致的启动报错。
-- v0.4.8 bugfix: 右键菜单点击后主动收起，修正焦点刷新与暂停文案同步问题。
-- v0.4.9 bugfix: 菜单弹出后补齐焦点与激活项，修复首次左键选择无法收起问题。
-- v0.4.10 feature: 详情页周末日期使用重点色高亮显示。
-- v0.4.11 bugfix: 右键菜单打开时暂停置顶兜底，避免菜单被窗口抢焦点。
-- v0.5.0 feature: 新增开机自启开关（Windows），支持在右键菜单直接启停并同步状态。
-- v0.5.1 refactor: 整理 v0.3 阶段修改日志表述，统一历史记录粒度与风格。
-- v0.6.0 feature: 在“配置”中新增开机自启选项，并与右键菜单及系统自启状态保持同步。
-- v0.6.1 bugfix: 启动流程改为仅读取配置状态（不强制改写注册表），并为旧配置自动回填开机自启字段。
+- v0.3.x refactor/bugfix: 拆分配置、存储、系统调用与 UI 逻辑模块；增强非 Windows 降级与配置时间边界校验。
+- v0.4.x feature/refactor/bugfix: 下班后最后使用时间、单实例锁、详情弹窗精简、右键菜单样式与收起修复、周末高亮。
+- v0.5.x feature/refactor: 右键菜单开机自启开关；整理修改日志。
+- v0.6.x feature/bugfix: 配置页开机自启选项；启动不强制改写注册表。
+- v0.7.0 refactor/bugfix/feature: 第一性原理重构为 domain/infra/ui 分层并补齐单测；修复锁屏检测（旧方案永不返回锁屏，带薪上限从未生效）；计费与窗口可见性解耦；新数据格式且不兼容旧文件；仅支持 Windows；悬浮窗低调化、自绘菜单、统计与配置页重设计；修复主循环异常断链、托盘跨线程调用 Tk、打包缺托盘图标、日结快照过期。
 
 ## 理想规划
 - 进军 Web3，成为摸鱼界的代币；当前实现的只是最适合落地的一个小功能。

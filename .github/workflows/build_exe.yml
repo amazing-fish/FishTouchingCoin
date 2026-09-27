@@ -1,10 +1,9 @@
 name: Build FishMoney EXE
 
-# 触发机制：
-# 1. workflow_dispatch: 允许你在 Actions 页面手动点击按钮触发（推荐调试用）
-# 2. push tags: 当你打 tag (如 v1.0) 时自动触发发布流程
+# workflow_dispatch：手动触发；push tags v*：自动发布到 Releases
 on:
   workflow_dispatch:
+  pull_request:
   push:
     tags:
       - 'v*'
@@ -13,37 +12,28 @@ permissions:
 
 jobs:
   build:
-    name: Build EXE on Windows
-    runs-on: windows-latest  # 必须使用 Windows 环境，因为你的代码用了 windll
+    name: Test & build on Windows
+    runs-on: windows-latest
 
     steps:
-      # 1. 拉取代码
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2. 设置 Python 环境
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # 推荐使用较新的稳定版
+          python-version: '3.12'
 
-      # 3. 安装依赖
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          pip install -r requirements-dev.txt
 
-      # 4. 执行打包命令 (核心步骤)
+      - name: Test
+        run: python -m pytest -q
+
+      # --add-data：把 app.ico 打进 exe，托盘图标才不会退化为占位图
       - name: Build with PyInstaller
-        run: |
-          # --onefile: 打包成单文件
-          # --noconsole: 隐藏黑色命令行窗口 (GUI程序必备)
-          # --name: 指定生成的 EXE 名字
-          # --clean: 清理缓存
-          pyinstaller --onefile --noconsole --clean --icon="app.ico" --name "FishMoney" fish.py
+        run: pyinstaller --onefile --noconsole --clean --icon="app.ico" --add-data "app.ico;." --name "FishMoney" fish.py
 
-      # 5. 上传构建产物 (让你能下载到)
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -51,11 +41,8 @@ jobs:
           path: dist/FishMoney.exe
           retention-days: 5
 
-      # 6. (进阶) 如果是打 Tag 触发，自动发布到 Releases 页面
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: dist/FishMoney.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
