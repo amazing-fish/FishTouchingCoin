@@ -6,7 +6,6 @@ from ..domain.meter import Status
 
 # —— 悬浮窗（深色胶囊） ——
 OVERLAY_BG = "#1B1E24"
-OVERLAY_BORDER = "#3A404C"
 OVERLAY_MUTED = "#8B93A1"
 
 # —— 窗口（浅色卡片） ——

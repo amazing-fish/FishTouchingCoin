@@ -11,8 +11,8 @@ from . import theme
 class Overlay:
     """置顶悬浮胶囊。
 
-    低调优先：平时只显示暗灰色数字（无 ¥、无状态文字），旁人一眼看不出是什么；
-    鼠标悬停才展开状态、倍率与 4 位小数。左键拖动，双击详情，右键菜单。
+    低调优先：平时只显示暗灰色数字（无 ¥、无状态文字、无描边），旁人一眼看不出是什么；
+    鼠标悬停满 3 秒才展开状态、倍率与 4 位小数，移开立即收起。左键拖动，双击详情，右键菜单。
     """
 
     PAD_X = 9
@@ -21,6 +21,7 @@ class Overlay:
     GAP = 6
     LABEL_GAP = 8
     REST_ALPHA = 0.62
+    HOVER_DELAY_MS = 3000  # 悬停满 3 秒才展开，鼠标路过不会闪出信息
 
     def __init__(self, root: tk.Tk, fonts: theme.Fonts, on_menu: Callable[[int, int], None],
                  on_double_click: Callable[[], None]):
@@ -50,14 +51,15 @@ class Overlay:
         self._right: int | None = None
         self._bottom: int | None = None
         self._drag: tuple[int, int] | None = None
+        self._hover_job: str | None = None
 
         self.canvas.bind("<ButtonPress-1>", self._press)
         self.canvas.bind("<B1-Motion>", self._motion)
         self.canvas.bind("<ButtonRelease-1>", self._release)
         self.canvas.bind("<Double-Button-1>", lambda e: self.on_double_click())
         self.canvas.bind("<Button-3>", lambda e: self.on_menu(e.x_root, e.y_root))
-        self.canvas.bind("<Enter>", lambda e: self._set_hover(True))
-        self.canvas.bind("<Leave>", lambda e: self._set_hover(False))
+        self.canvas.bind("<Enter>", self._on_enter)
+        self.canvas.bind("<Leave>", self._on_leave)
         root.bind("<Map>", lambda e: self._decorate())
         # Win+D / Win+M 等会把无边框窗口最小化成桌面左下角的小标题条；改为隐藏，只留托盘
         root.bind("<Unmap>", self._on_unmap)
@@ -66,7 +68,7 @@ class Overlay:
         return round(v * self.k)
 
     def _decorate(self):
-        windows.round_corners(self.root, border=theme.OVERLAY_BORDER)
+        windows.round_corners(self.root, border=windows.BORDER_NONE)
 
     # —— 渲染 ——
 
@@ -118,6 +120,24 @@ class Overlay:
         # 固定右下角：展开或位数增加时向左扩展
         self.root.geometry(f"{w}x{h}+{self._right - w}+{self._bottom - h}")
 
+    def _on_enter(self, e):
+        self._cancel_hover()
+        self._hover_job = self.root.after(self.HOVER_DELAY_MS, self._hover_elapsed)
+
+    def _on_leave(self, e):
+        self._cancel_hover()
+        self._set_hover(False)
+
+    def _hover_elapsed(self):
+        self._hover_job = None
+        if not self.dragging:
+            self._set_hover(True)
+
+    def _cancel_hover(self):
+        if self._hover_job is not None:
+            self.root.after_cancel(self._hover_job)
+            self._hover_job = None
+
     def _set_hover(self, hover: bool):
         if hover != self._hover:
             self._hover = hover
@@ -126,6 +146,7 @@ class Overlay:
     # —— 拖动 ——
 
     def _press(self, e):
+        self._cancel_hover()  # 拖动中不展开，避免宽度变化导致跳动
         self._drag = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
 
     def _motion(self, e):

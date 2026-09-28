@@ -253,10 +253,18 @@ def set_caption_color(widget, color: str) -> bool:
     return _dwm_set_int(toplevel_hwnd(widget), DWMWA_CAPTION_COLOR, _colorref(color))
 
 
+BORDER_NONE = "none"
+DWMWA_COLOR_NONE = 0xFFFFFFFE  # 不绘制系统默认的 1px 窗口描边
+
+
 def round_corners(widget, small: bool = False, border: str | None = None) -> bool:
-    """Win11 系统级抗锯齿圆角；Win10 上静默失败（返回 False）。"""
+    """Win11 系统级抗锯齿圆角；Win10 上静默失败（返回 False）。
+
+    border: "#RRGGBB" 指定描边色；BORDER_NONE 去掉描边；None 保留系统默认。
+    """
     hwnd = toplevel_hwnd(widget)
     ok = _dwm_set_int(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUNDSMALL if small else DWMWCP_ROUND)
     if ok and border:
-        _dwm_set_int(hwnd, DWMWA_BORDER_COLOR, _colorref(border))
+        color = DWMWA_COLOR_NONE if border == BORDER_NONE else _colorref(border)
+        _dwm_set_int(hwnd, DWMWA_BORDER_COLOR, ctypes.c_int(color & 0xFFFFFFFF).value)
     return ok
