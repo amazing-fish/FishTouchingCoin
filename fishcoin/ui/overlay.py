@@ -159,6 +159,9 @@ class Overlay:
             self._drag = None
             self._right = self.root.winfo_x() + self.root.winfo_width()
             self._bottom = self.root.winfo_y() + self.root.winfo_height()
+        # 按下时取消了悬停计时；指针仍停在窗口上不会再有 <Enter>，需在松开时重新计时
+        if not self._hover and self.root.winfo_containing(e.x_root, e.y_root) is self.canvas:
+            self._on_enter(e)
 
     @property
     def dragging(self) -> bool:
