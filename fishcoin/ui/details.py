@@ -8,8 +8,8 @@ from ..domain.ledger import Ledger
 from ..domain.meter import Status
 from ..domain.schedule import is_weekend, rate_on
 from ..domain.settings import Settings
-from ..infra import windows
 from . import theme
+from .windowing import present
 
 WEEKDAYS = "一二三四五六日"
 
@@ -50,12 +50,11 @@ class DetailsWindow:
         self.snapshot = snapshot
         self.k = theme.scale(root)
         self.win = tk.Toplevel(root, bg=theme.BG)
+        self.win.withdraw()  # 绘制并居中后再显示，避免先闪现在左上角
         self.win.title("统计")  # 标题会出现在 Alt-Tab / 任务栏，保持中性
         self.win.resizable(False, False)
         if icon:
             self.win.iconbitmap(icon)
-        self.win.geometry(f"{round(self._px(self.W))}x{round(self._px(self.H))}")
-        self._center()
 
         self.f = {
             "small": tkfont.Font(root=root, family=fonts.ui, size=8),
@@ -68,19 +67,12 @@ class DetailsWindow:
         self.canvas = tk.Canvas(self.win, bg=theme.BG, highlightthickness=0, bd=0)
         self.canvas.pack(fill="both", expand=True)
 
-        self.win.update_idletasks()
-        windows.set_caption_color(self.win, theme.BG)
         self._job: str | None = None
         self.refresh()
+        present(self.win, round(self._px(self.W)), round(self._px(self.H)), caption=theme.BG)
 
     def _px(self, v: float) -> float:
         return v * self.k
-
-    def _center(self):
-        self.win.update_idletasks()
-        sw, sh = self.win.winfo_screenwidth(), self.win.winfo_screenheight()
-        w, h = self._px(self.W), self._px(self.H)
-        self.win.geometry(f"+{int((sw - w) / 2)}+{int((sh - h) / 2.4)}")
 
     def exists(self) -> bool:
         try:
