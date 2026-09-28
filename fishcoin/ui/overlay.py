@@ -59,6 +59,8 @@ class Overlay:
         self.canvas.bind("<Enter>", lambda e: self._set_hover(True))
         self.canvas.bind("<Leave>", lambda e: self._set_hover(False))
         root.bind("<Map>", lambda e: self._decorate())
+        # Win+D / Win+M 等会把无边框窗口最小化成桌面左下角的小标题条；改为隐藏，只留托盘
+        root.bind("<Unmap>", self._on_unmap)
 
     def _px(self, v: float) -> int:
         return round(v * self.k)
@@ -151,6 +153,10 @@ class Overlay:
     def hide(self):
         self.visible = False
         self.root.withdraw()
+
+    def _on_unmap(self, e):
+        if e.widget is self.root and self.root.state() == "iconic":
+            self.root.after_idle(self.hide)
 
     def toggle(self):
         self.hide() if self.visible else self.show()

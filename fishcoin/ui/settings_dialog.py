@@ -4,8 +4,8 @@ from collections.abc import Callable
 from dataclasses import replace
 
 from ..domain.settings import Settings, format_hhmm, parse_hhmm
-from ..infra import windows
 from . import theme
+from .windowing import present
 
 # (字段, 标签, 单位)
 SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
@@ -81,6 +81,7 @@ class SettingsDialog:
         self.f_title = tkfont.Font(root=root, family=fonts.ui, size=13, weight="bold")
 
         win = self.win = tk.Toplevel(root, bg=theme.BG)
+        win.withdraw()  # 布局完成并居中后再显示，避免先闪现在左上角
         win.title("欢迎使用摸鱼币" if first_run else "配置")
         win.resizable(False, False)
         if icon:
@@ -147,12 +148,7 @@ class SettingsDialog:
             var.trace_add("write", lambda *_: self._update_preview())
         self._update_preview()
 
-        win.update_idletasks()
-        windows.set_caption_color(win, theme.BG)
-        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        win.geometry(f"+{(sw - win.winfo_reqwidth()) // 2}+{int((sh - win.winfo_reqheight()) / 2.4)}")
-        win.lift()
-        win.focus_force()
+        present(win, caption=theme.BG)
 
     def _entry(self, parent, key: str, value, width: int) -> tk.Entry:
         text = f"{value:f}".rstrip("0").rstrip(".") if isinstance(value, float) else str(value)
